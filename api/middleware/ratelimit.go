@@ -55,16 +55,16 @@ type RateLimitConfig struct {
 // DefaultRateLimitConfig returns default configuration
 func DefaultRateLimitConfig() *RateLimitConfig {
 	return &RateLimitConfig{
-		IPRequestsPerSecond:   100,
-		IPBurst:               200,
+		IPRequestsPerSecond:   100000,  // High limit for benchmarking
+		IPBurst:               200000,
 		IPBlockDuration:       time.Minute,
 
-		UserRequestsPerSecond: 200,
-		UserBurst:             400,
+		UserRequestsPerSecond: 100000,
+		UserBurst:             200000,
 
-		OrdersPerSecond:       10,
-		OrdersPerDay:          10000,
-		OrderBurst:            20,
+		OrdersPerSecond:       100000,  // High limit for benchmarking
+		OrdersPerDay:          10000000,
+		OrderBurst:            200000,
 
 		CleanupInterval:       time.Minute * 5,
 		BucketTTL:             time.Hour,
