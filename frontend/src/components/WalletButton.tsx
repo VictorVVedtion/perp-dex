@@ -3,12 +3,24 @@
  * Handles wallet connection and displays connected address
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useWallet, shortenAddress } from '@/hooks/useWallet';
 
 export function WalletButton() {
-  const { connected, connecting, address, error, connect, disconnect } = useWallet();
+  const { connected, connecting, address, error, isMockMode, connect, disconnect } = useWallet();
   const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (connecting) {
     return (
@@ -43,13 +55,19 @@ export function WalletButton() {
 
   if (connected && address) {
     return (
-      <div className="relative">
+      <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setShowDropdown(!showDropdown)}
           className="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 transition-colors"
         >
-          <div className="w-2 h-2 rounded-full bg-primary-400" />
+          <div className="w-2 h-2 rounded-full bg-primary-400 animate-pulse" />
           <span className="font-mono">{shortenAddress(address)}</span>
+          {/* Mock mode badge */}
+          {isMockMode && (
+            <span className="px-1.5 py-0.5 bg-warning-900/50 text-warning-400 text-[10px] rounded font-medium">
+              DEMO
+            </span>
+          )}
           <svg
             className={`w-4 h-4 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
             fill="none"
@@ -61,14 +79,7 @@ export function WalletButton() {
         </button>
 
         {showDropdown && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setShowDropdown(false)}
-            />
-            {/* Dropdown */}
-            <div className="absolute right-0 mt-2 w-48 bg-dark-800 border border-dark-600 rounded-lg shadow-lg z-20">
+            <div className="absolute right-0 mt-2 w-56 bg-dark-800 border border-dark-600 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="p-3 border-b border-dark-600">
                 <p className="text-xs text-dark-400">已连接地址</p>
                 <p className="text-sm text-white font-mono truncate">{address}</p>
@@ -100,7 +111,6 @@ export function WalletButton() {
                 </button>
               </div>
             </div>
-          </>
         )}
       </div>
     );

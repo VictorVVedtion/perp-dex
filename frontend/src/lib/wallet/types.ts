@@ -3,7 +3,7 @@
  */
 
 // Wallet provider type
-export type WalletProvider = 'keplr' | 'metamask' | 'walletconnect';
+export type WalletProvider = 'keplr' | 'metamask' | 'walletconnect' | 'mock';
 
 // Chain configuration
 export interface ChainConfig {
@@ -91,6 +91,7 @@ export interface IWallet {
   connect(): Promise<WalletAccount>;
   disconnect(): Promise<void>;
   getAccount(): Promise<WalletAccount>;
+  getOfflineSigner(): any;
   signDirect(
     signerAddress: string,
     signDoc: any

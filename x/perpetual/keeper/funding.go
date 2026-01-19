@@ -21,6 +21,16 @@ var (
 	FundingPaymentCounterKey = []byte{0x09}
 )
 
+const fundingIntervalHours = 8
+
+func nextFundingTimeUTC(now time.Time) time.Time {
+	utc := now.UTC()
+	dayStart := time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)
+	period := time.Duration(fundingIntervalHours) * time.Hour
+	elapsed := utc.Sub(dayStart)
+	return dayStart.Add((elapsed/period + 1) * period)
+}
+
 // ============ Funding Rate Storage ============
 
 // SetFundingRate saves a funding rate record
@@ -286,8 +296,7 @@ func (k *Keeper) SettleFunding(ctx sdk.Context, marketID string) error {
 	}
 
 	// Update next funding time
-	config := k.GetFundingConfig(ctx, marketID)
-	nextTime := ctx.BlockTime().Add(time.Duration(config.Interval) * time.Second)
+	nextTime := nextFundingTimeUTC(ctx.BlockTime())
 	k.SetNextFundingTime(ctx, marketID, nextTime)
 
 	// Emit event
@@ -315,12 +324,16 @@ func (k *Keeper) SettleFunding(ctx sdk.Context, marketID string) error {
 }
 
 // FundingEndBlocker checks and settles funding for all markets
-func (k *Keeper) FundingEndBlocker(ctx sdk.Context) error {
+func (k *Keeper) FundingEndBlocker(ctx sdk.Context) {
 	markets := k.ListActiveMarkets(ctx)
 	currentTime := ctx.BlockTime()
 
 	for _, market := range markets {
 		nextFundingTime := k.GetNextFundingTime(ctx, market.MarketID)
+		if nextFundingTime.IsZero() {
+			nextFundingTime = nextFundingTimeUTC(currentTime)
+			k.SetNextFundingTime(ctx, market.MarketID, nextFundingTime)
+		}
 
 		// Check if funding is due
 		if currentTime.After(nextFundingTime) || currentTime.Equal(nextFundingTime) {
@@ -341,8 +354,6 @@ func (k *Keeper) FundingEndBlocker(ctx sdk.Context) error {
 			k.SetMarket(ctx, market)
 		}
 	}
-
-	return nil
 }
 
 // ============ Funding Info Query ============

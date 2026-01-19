@@ -49,28 +49,28 @@ func NewFundingPayment(paymentID, trader, marketID string, amount, rate math.Leg
 }
 
 // FundingConfig contains funding rate configuration
-// Updated parameters aligned with Hyperliquid:
-// - Interval: 1 hour (from 8 hours)
-// - MaxRate: ±0.5% (from ±0.1%)
+// Updated parameters aligned with settlement schedule:
+// - Interval: 8 hours
+// - MaxRate: ±0.5%
 type FundingConfig struct {
-	Interval      int64          // Settlement interval in seconds (default: 3600 = 1 hour)
+	Interval      int64          // Settlement interval in seconds (default: 28800 = 8 hours)
 	MaxRate       math.LegacyDec // Maximum funding rate per interval
 	MinRate       math.LegacyDec // Minimum funding rate per interval
 	DampingFactor math.LegacyDec // Damping factor for rate calculation (default: 0.05)
 }
 
 // DefaultFundingConfig returns the default funding configuration
-// Updated parameters aligned with Hyperliquid:
-// - Interval: 1 hour (3600 seconds) - from 8 hours
-// - MaxRate: 0.5% (0.005) - from 0.1%
-// - MinRate: -0.5% (-0.005) - from -0.1%
-// - DampingFactor: 0.05 - from 0.03
+// Updated parameters aligned with settlement schedule:
+// - Interval: 8 hours (28800 seconds)
+// - MaxRate: 0.5% (0.005)
+// - MinRate: -0.5% (-0.005)
+// - DampingFactor: 0.05
 func DefaultFundingConfig() FundingConfig {
 	return FundingConfig{
-		Interval:      3600,                            // 1 hour (updated from 8 hours)
-		MaxRate:       math.LegacyNewDecWithPrec(5, 3), // 0.005 = 0.5% (updated from 0.1%)
+		Interval:      28800,                            // 8 hours
+		MaxRate:       math.LegacyNewDecWithPrec(5, 3),  // 0.005 = 0.5% (updated from 0.1%)
 		MinRate:       math.LegacyNewDecWithPrec(-5, 3), // -0.005 = -0.5% (updated from -0.1%)
-		DampingFactor: math.LegacyNewDecWithPrec(5, 2), // 0.05 (updated from 0.03)
+		DampingFactor: math.LegacyNewDecWithPrec(5, 2),  // 0.05 (updated from 0.03)
 	}
 }
 

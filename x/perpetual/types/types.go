@@ -52,11 +52,11 @@ type Market struct {
 }
 
 // NewMarket creates a new market with default values for MVP
-// Updated parameters aligned with Hyperliquid:
+// Updated parameters aligned with settlement schedule:
 // - MaxLeverage: 50x (from 10x)
 // - InitialMarginRate: 5% (from 10%)
 // - MaintenanceMarginRate: 2.5% (from 5%)
-// - FundingInterval: 1 hour (from 8 hours)
+// - FundingInterval: 8 hours
 func NewMarket(marketID, baseAsset, quoteAsset string) *Market {
 	now := time.Now()
 	return &Market{
@@ -76,7 +76,7 @@ func NewMarket(marketID, baseAsset, quoteAsset string) *Market {
 		MinOrderSize:    math.LegacyNewDecWithPrec(1, 4), // 0.0001
 		MaxOrderSize:    math.LegacyNewDec(1000),         // 1000
 		MaxPositionSize: math.LegacyNewDec(10000),        // 10000
-		FundingInterval: 3600,                            // 1 hour (updated from 8 hours)
+		FundingInterval: 28800,                           // 8 hours
 		InsuranceFundID: "",
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -129,11 +129,11 @@ type MarketConfig struct {
 }
 
 // DefaultMarketConfigs returns default configurations for initial markets
-// Updated parameters aligned with Hyperliquid:
+// Updated parameters aligned with settlement schedule:
 // - MaxLeverage: 50x
 // - InitialMarginRate: 5%
 // - MaintenanceMarginRate: 2.5%
-// - FundingInterval: 1 hour (3600 seconds)
+// - FundingInterval: 8 hours (28800 seconds)
 func DefaultMarketConfigs() map[string]MarketConfig {
 	return map[string]MarketConfig{
 		"BTC-USDC": {
@@ -150,7 +150,7 @@ func DefaultMarketConfigs() map[string]MarketConfig {
 			MinOrderSize:          math.LegacyNewDecWithPrec(1, 4),  // 0.0001
 			MaxOrderSize:          math.LegacyNewDec(100),           // 100 BTC
 			MaxPositionSize:       math.LegacyNewDec(1000),          // 1000 BTC
-			FundingInterval:       3600,                             // 1 hour
+			FundingInterval:       28800,                            // 8 hours
 		},
 		"ETH-USDC": {
 			MarketID:              "ETH-USDC",
@@ -166,7 +166,7 @@ func DefaultMarketConfigs() map[string]MarketConfig {
 			MinOrderSize:          math.LegacyNewDecWithPrec(1, 3),
 			MaxOrderSize:          math.LegacyNewDec(1000),
 			MaxPositionSize:       math.LegacyNewDec(10000),
-			FundingInterval:       3600, // 1 hour
+			FundingInterval:       28800, // 8 hours
 		},
 		"SOL-USDC": {
 			MarketID:              "SOL-USDC",
@@ -182,7 +182,7 @@ func DefaultMarketConfigs() map[string]MarketConfig {
 			MinOrderSize:          math.LegacyNewDecWithPrec(1, 2),
 			MaxOrderSize:          math.LegacyNewDec(10000),
 			MaxPositionSize:       math.LegacyNewDec(100000),
-			FundingInterval:       3600, // 1 hour
+			FundingInterval:       28800, // 8 hours
 		},
 		"ARB-USDC": {
 			MarketID:              "ARB-USDC",
@@ -198,7 +198,7 @@ func DefaultMarketConfigs() map[string]MarketConfig {
 			MinOrderSize:          math.LegacyNewDecWithPrec(1, 1),
 			MaxOrderSize:          math.LegacyNewDec(100000),
 			MaxPositionSize:       math.LegacyNewDec(1000000),
-			FundingInterval:       3600, // 1 hour
+			FundingInterval:       28800, // 8 hours
 		},
 	}
 }

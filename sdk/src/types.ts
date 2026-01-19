@@ -87,6 +87,20 @@ export interface FundingRate {
   timestamp: number;
 }
 
+// K-line (candlestick) data
+export interface KlineData {
+  time: number;      // Unix timestamp
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+  turnover?: number;
+}
+
+// K-line interval types
+export type KlineInterval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
+
 // Account
 export interface Account {
   address: string;

@@ -44,9 +44,9 @@ func TestNewMarket(t *testing.T) {
 		t.Errorf("expected active status, got %s", market.Status.String())
 	}
 
-	// Check funding interval (updated to 1 hour)
-	if market.FundingInterval != 3600 {
-		t.Errorf("expected funding interval 3600, got %d", market.FundingInterval)
+	// Check funding interval (updated to 8 hours)
+	if market.FundingInterval != 28800 {
+		t.Errorf("expected funding interval 28800, got %d", market.FundingInterval)
 	}
 }
 
@@ -57,7 +57,7 @@ func TestNewMarketWithConfig(t *testing.T) {
 		BaseAsset:             "ETH",
 		QuoteAsset:            "USDC",
 		MaxLeverage:           math.LegacyNewDec(20),
-		InitialMarginRate:     math.LegacyNewDecWithPrec(5, 2), // 5%
+		InitialMarginRate:     math.LegacyNewDecWithPrec(5, 2),  // 5%
 		MaintenanceMarginRate: math.LegacyNewDecWithPrec(25, 3), // 2.5%
 		TakerFeeRate:          math.LegacyNewDecWithPrec(3, 4),
 		MakerFeeRate:          math.LegacyNewDecWithPrec(1, 4),
@@ -106,9 +106,9 @@ func TestDefaultMarketConfigs(t *testing.T) {
 			t.Errorf("%s: expected max leverage 50, got %s", marketID, config.MaxLeverage.String())
 		}
 
-		// Verify funding interval is 1 hour (updated)
-		if config.FundingInterval != 3600 {
-			t.Errorf("%s: expected funding interval 3600, got %d", marketID, config.FundingInterval)
+		// Verify funding interval is 8 hours (updated)
+		if config.FundingInterval != 28800 {
+			t.Errorf("%s: expected funding interval 28800, got %d", marketID, config.FundingInterval)
 		}
 	}
 }
@@ -144,8 +144,8 @@ func TestMarketStatus(t *testing.T) {
 
 // TestValidateOrderSize tests order size validation
 func TestValidateOrderSize(t *testing.T) {
-	minSize := math.LegacyNewDecWithPrec(1, 4)  // 0.0001
-	maxSize := math.LegacyNewDec(100)            // 100
+	minSize := math.LegacyNewDecWithPrec(1, 4) // 0.0001
+	maxSize := math.LegacyNewDec(100)          // 100
 
 	tests := []struct {
 		name    string

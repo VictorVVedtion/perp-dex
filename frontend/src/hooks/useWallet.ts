@@ -1,11 +1,14 @@
 /**
  * Wallet Hook for PerpDEX
  * Provides wallet connection state and actions
+ * Supports both Keplr and Mock wallet modes
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { KeplrWallet, PERPDEX_CHAIN_CONFIG } from '@/lib/wallet/keplr';
-import type { WalletAccount } from '@/lib/wallet/types';
+import { MockWallet, mockSignAndBroadcast } from '@/lib/wallet/mock';
+import type { IWallet, WalletAccount } from '@/lib/wallet/types';
+import config from '@/lib/config';
 
 interface UseWalletReturn {
   connected: boolean;
@@ -13,17 +16,26 @@ interface UseWalletReturn {
   account: WalletAccount | null;
   address: string;
   error: string | null;
+  isMockMode: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   signAndBroadcast: (messages: any[], memo?: string) => Promise<any>;
 }
 
-// Singleton wallet instance
-let walletInstance: KeplrWallet | null = null;
+// Check if mock mode is enabled
+const isMockMode = config.features.mockMode;
 
-function getWalletInstance(): KeplrWallet {
+// Singleton wallet instance
+let walletInstance: IWallet | null = null;
+
+function getWalletInstance(): IWallet {
   if (!walletInstance) {
-    walletInstance = new KeplrWallet(PERPDEX_CHAIN_CONFIG);
+    if (isMockMode) {
+      console.log('[useWallet] Using Mock Wallet (NEXT_PUBLIC_MOCK_MODE=true)');
+      walletInstance = new MockWallet();
+    } else {
+      walletInstance = new KeplrWallet(PERPDEX_CHAIN_CONFIG);
+    }
   }
   return walletInstance;
 }
@@ -56,7 +68,8 @@ export function useWallet(): UseWalletReturn {
   const connect = useCallback(async () => {
     const wallet = getWalletInstance();
 
-    if (!KeplrWallet.isInstalled()) {
+    // In mock mode, skip Keplr installation check
+    if (!isMockMode && !KeplrWallet.isInstalled()) {
       setError('请先安装 Keplr 钱包扩展');
       window.open('https://www.keplr.app/download', '_blank');
       return;
@@ -75,7 +88,14 @@ export function useWallet(): UseWalletReturn {
         localStorage.setItem('wallet_connected', 'true');
       }
     } catch (err: any) {
-      setError(err.message || '连接钱包失败');
+      // Classify errors for better UX
+      let errorMessage = err.message || '连接钱包失败';
+      if (err.message?.includes('rejected')) {
+        errorMessage = '已取消钱包连接';
+      } else if (err.message?.includes('not installed')) {
+        errorMessage = '请先安装 Keplr 钱包扩展';
+      }
+      setError(errorMessage);
       setConnected(false);
       setAccount(null);
     } finally {
@@ -110,6 +130,11 @@ export function useWallet(): UseWalletReturn {
       }
 
       try {
+        // Use mock sign and broadcast in mock mode
+        if (isMockMode) {
+          return await mockSignAndBroadcast(messages, memo);
+        }
+
         // Get the offline signer
         const signer = wallet.getOfflineSigner();
 
@@ -140,7 +165,18 @@ export function useWallet(): UseWalletReturn {
 
         return result;
       } catch (err: any) {
-        throw new Error(err.message || '交易签名失败');
+        // Classify errors for better UX
+        let errorMessage = err.message || '交易签名失败';
+        if (err.message?.includes('rejected') || err.message?.includes('denied')) {
+          errorMessage = '交易已取消';
+        } else if (err.message?.includes('timeout')) {
+          errorMessage = '交易超时，请检查网络';
+        } else if (err.message?.includes('insufficient')) {
+          errorMessage = '余额不足';
+        } else if (err.message?.includes('connect')) {
+          errorMessage = '网络连接失败，请重试';
+        }
+        throw new Error(errorMessage);
       }
     },
     [account]
@@ -162,6 +198,7 @@ export function useWallet(): UseWalletReturn {
     account,
     address: account?.address || '',
     error,
+    isMockMode,
     connect,
     disconnect,
     signAndBroadcast,

@@ -30,7 +30,7 @@ func (k *Keeper) CreateMarket(ctx sdk.Context, config types.MarketConfig) error 
 	k.SetPrice(ctx, types.NewPriceInfo(config.MarketID, math.LegacyZeroDec()))
 
 	// Set next funding time
-	nextFundingTime := ctx.BlockTime().Add(time.Duration(config.FundingInterval) * time.Second)
+	nextFundingTime := nextFundingTimeUTC(ctx.BlockTime())
 	k.SetNextFundingTime(ctx, config.MarketID, nextFundingTime)
 
 	// Emit event

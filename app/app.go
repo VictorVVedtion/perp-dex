@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"cosmossdk.io/core/appmodule"
-	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
+	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -154,17 +154,18 @@ func NewApp(
 		logger,
 	)
 
+	orderbookPerpAdapter := newOrderbookPerpetualAdapter(app.PerpetualKeeper)
 	app.OrderbookKeeper = orderbookkeeper.NewKeeper(
 		appCodec,
 		keys["orderbook"],
-		nil, // perpetual keeper interface
+		orderbookPerpAdapter,
 		logger,
 	)
 
 	app.ClearinghouseKeeper = clearinghousekeeper.NewKeeper(
 		appCodec,
 		keys["clearinghouse"],
-		nil, // perpetual keeper interface
+		app.PerpetualKeeper,
 		nil, // orderbook keeper interface
 		logger,
 	)
@@ -203,7 +204,7 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 	totalStart := time.Now()
 
 	// Track individual operation timings
-	var oracleDuration, matchingDuration, liquidationDuration time.Duration
+	var oracleDuration, matchingDuration, liquidationDuration, fundingDuration, conditionalDuration time.Duration
 
 	// ===========================================
 	// Phase 1: Oracle Price Updates
@@ -230,6 +231,20 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 	liquidationDuration = time.Since(liquidationStart)
 
 	// ===========================================
+	// Phase 4: Funding Settlement
+	// ===========================================
+	fundingStart := time.Now()
+	app.PerpetualKeeper.FundingEndBlocker(ctx)
+	fundingDuration = time.Since(fundingStart)
+
+	// ===========================================
+	// Phase 5: Conditional Orders
+	// ===========================================
+	conditionalStart := time.Now()
+	app.OrderbookKeeper.ConditionalOrderEndBlocker(ctx)
+	conditionalDuration = time.Since(conditionalStart)
+
+	// ===========================================
 	// Performance Logging
 	// ===========================================
 	totalDuration := time.Since(totalStart)
@@ -241,6 +256,8 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 		"oracle_ms", oracleDuration.Milliseconds(),
 		"matching_ms", matchingDuration.Milliseconds(),
 		"liquidation_ms", liquidationDuration.Milliseconds(),
+		"funding_ms", fundingDuration.Milliseconds(),
+		"conditional_ms", conditionalDuration.Milliseconds(),
 	)
 
 	// Log matching statistics if any orders were processed
@@ -287,6 +304,31 @@ type StakingGenesisState struct {
 	} `json:"validators"`
 }
 
+// GenutilGenesisState represents the genutil module's genesis state
+type GenutilGenesisState struct {
+	GenTxs []json.RawMessage `json:"gen_txs"`
+}
+
+// GenTx represents a genesis transaction
+type GenTx struct {
+	Body struct {
+		Messages []json.RawMessage `json:"messages"`
+	} `json:"body"`
+}
+
+// MsgCreateValidator represents the create validator message
+type MsgCreateValidator struct {
+	Type   string `json:"@type"`
+	Pubkey struct {
+		Type string `json:"@type"`
+		Key  string `json:"key"`
+	} `json:"pubkey"`
+	Value struct {
+		Denom  string `json:"denom"`
+		Amount string `json:"amount"`
+	} `json:"value"`
+}
+
 // InitChainer initializes the chain
 func (app *App) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
 	var genesisState map[string]json.RawMessage
@@ -304,14 +346,13 @@ func (app *App) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.
 		}, nil
 	}
 
-	// Try to get validators from staking genesis state
+	// Try to get validators from staking genesis state first
 	var validators []abci.ValidatorUpdate
 	if stakingGenesis, ok := genesisState["staking"]; ok {
 		var stakingState StakingGenesisState
 		if err := json.Unmarshal(stakingGenesis, &stakingState); err == nil {
 			for _, val := range stakingState.Validators {
 				if val.Status == "BOND_STATUS_BONDED" {
-					// Decode base64 pubkey
 					pubKeyBytes, err := base64.StdEncoding.DecodeString(val.ConsensusPubkey.Key)
 					if err != nil {
 						continue
@@ -324,6 +365,41 @@ func (app *App) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.
 						},
 						Power: 100,
 					})
+				}
+			}
+		}
+	}
+
+	// If no validators from staking, try to extract from gentx
+	if len(validators) == 0 {
+		if genutilGenesis, ok := genesisState["genutil"]; ok {
+			var genutilState GenutilGenesisState
+			if err := json.Unmarshal(genutilGenesis, &genutilState); err == nil {
+				for _, genTxRaw := range genutilState.GenTxs {
+					var genTx GenTx
+					if err := json.Unmarshal(genTxRaw, &genTx); err != nil {
+						continue
+					}
+					for _, msgRaw := range genTx.Body.Messages {
+						var msg MsgCreateValidator
+						if err := json.Unmarshal(msgRaw, &msg); err != nil {
+							continue
+						}
+						if msg.Type == "/cosmos.staking.v1beta1.MsgCreateValidator" {
+							pubKeyBytes, err := base64.StdEncoding.DecodeString(msg.Pubkey.Key)
+							if err != nil {
+								continue
+							}
+							validators = append(validators, abci.ValidatorUpdate{
+								PubKey: cmtcrypto.PublicKey{
+									Sum: &cmtcrypto.PublicKey_Ed25519{
+										Ed25519: pubKeyBytes,
+									},
+								},
+								Power: 100,
+							})
+						}
+					}
 				}
 			}
 		}

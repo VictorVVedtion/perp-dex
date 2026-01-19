@@ -20,13 +20,16 @@ declare global {
   }
 }
 
+// Import config for environment-based URLs
+import config from '@/lib/config';
+
 // Default PerpDEX chain configuration
 export const PERPDEX_CHAIN_CONFIG: ChainConfig = {
-  chainId: 'perpdex-mainnet-1',
+  chainId: config.chain.chainId,
   chainName: 'PerpDEX',
-  rpcUrl: 'https://rpc.perpdex.io',
-  restUrl: 'https://api.perpdex.io',
-  wsUrl: 'wss://ws.perpdex.io',
+  rpcUrl: config.chain.rpcUrl,
+  restUrl: config.chain.restUrl,
+  wsUrl: config.api.wsUrl,
   stakeCurrency: {
     coinDenom: 'PERP',
     coinMinimalDenom: 'uperp',

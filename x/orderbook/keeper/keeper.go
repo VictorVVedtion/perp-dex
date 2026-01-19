@@ -26,6 +26,7 @@ var (
 // PerpetualKeeper defines the expected interface for the perpetual module
 type PerpetualKeeper interface {
 	GetMarket(ctx sdk.Context, marketID string) *Market
+	GetMarkPrice(ctx sdk.Context, marketID string) (math.LegacyDec, bool)
 	UpdatePosition(ctx sdk.Context, trader, marketID string, side types.Side, qty, price, fee interface{}) error
 	CheckMarginRequirement(ctx sdk.Context, trader, marketID string, side types.Side, qty, price interface{}) error
 }
@@ -116,6 +117,13 @@ func (k *Keeper) GetOrder(ctx sdk.Context, orderID string) *types.Order {
 		return nil
 	}
 	return &order
+}
+
+// DeleteOrder removes an order from the store
+func (k *Keeper) DeleteOrder(ctx sdk.Context, orderID string) {
+	store := k.GetStore(ctx)
+	key := append(OrderKeyPrefix, []byte(orderID)...)
+	store.Delete(key)
 }
 
 // GetOrdersByTrader returns all orders for a trader

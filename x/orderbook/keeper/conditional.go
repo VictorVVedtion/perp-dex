@@ -223,43 +223,66 @@ func (k *Keeper) ProcessTriggeredOrder(ctx sdk.Context, order *types.Order) (*Ma
 }
 
 // ConditionalOrderEndBlocker checks and triggers conditional orders at end of block
-func (k *Keeper) ConditionalOrderEndBlocker(ctx sdk.Context) error {
-	// This would be called from the app's EndBlocker
-	// Get all active markets and check their conditional orders
-
-	// Note: In a real implementation, you would get the list of markets
-	// from the perpetual keeper. For now, we'll process all conditional orders.
+func (k *Keeper) ConditionalOrderEndBlocker(ctx sdk.Context) {
+	if k.perpetualKeeper == nil {
+		k.Logger().Debug("conditional order endblocker skipped: perpetual keeper not set")
+		return
+	}
 
 	store := k.GetStore(ctx)
 	iterator := storetypes.KVStorePrefixIterator(store, ConditionalOrderKeyPrefix)
 	defer iterator.Close()
 
-	// Group orders by market
-	ordersByMarket := make(map[string][]*types.ConditionalOrder)
+	marketIDs := make(map[string]struct{})
+	activeCount := 0
+
 	for ; iterator.Valid(); iterator.Next() {
 		var order types.ConditionalOrder
 		if err := json.Unmarshal(iterator.Value(), &order); err != nil {
 			continue
 		}
 		if order.IsActive() {
-			ordersByMarket[order.MarketID] = append(ordersByMarket[order.MarketID], &order)
+			marketIDs[order.MarketID] = struct{}{}
+			activeCount++
 		}
 	}
 
-	// Process each market's orders
-	// Note: In production, we would get the mark price from the perpetual keeper
-	for marketID, orders := range ordersByMarket {
-		if len(orders) == 0 {
+	if len(marketIDs) == 0 {
+		return
+	}
+
+	triggeredCount := 0
+	processedCount := 0
+
+	for marketID := range marketIDs {
+		markPrice, ok := k.perpetualKeeper.GetMarkPrice(ctx, marketID)
+		if !ok || markPrice.IsZero() {
+			k.Logger().Debug("missing mark price for conditional orders",
+				"market_id", marketID,
+			)
 			continue
 		}
 
-		// Get mark price from perpetual keeper (would need interface)
-		// For now, skip price-dependent logic here as it's handled elsewhere
-		k.Logger().Debug("conditional orders pending",
-			"market_id", marketID,
-			"count", len(orders),
-		)
+		triggeredOrders := k.CheckAndTriggerConditionalOrders(ctx, marketID, markPrice)
+		for _, order := range triggeredOrders {
+			triggeredCount++
+			if _, err := k.ProcessTriggeredOrder(ctx, order); err != nil {
+				k.Logger().Error("failed to process triggered order",
+					"order_id", order.OrderID,
+					"market_id", order.MarketID,
+					"error", err,
+				)
+				continue
+			}
+			processedCount++
+		}
 	}
 
-	return nil
+	if triggeredCount > 0 {
+		k.Logger().Info("conditional orders processed",
+			"active", activeCount,
+			"triggered", triggeredCount,
+			"processed", processedCount,
+		)
+	}
 }

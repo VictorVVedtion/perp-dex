@@ -163,8 +163,47 @@ func (le *LiquidationEngine) ExecuteLiquidationWithReward(
 	}
 
 	// Transfer to insurance fund
-	// TODO: Implement insurance fund keeper integration
-	// le.keeper.insuranceKeeper.AddToFund(ctx, position.MarketID, insuranceFundShare)
+	if insuranceFundShare.IsPositive() {
+		if err := le.keeper.DepositToInsuranceFund(ctx, GlobalFundID, insuranceFundShare,
+			types.InsuranceEventLiquidationPenalty, liquidationID); err != nil {
+			le.keeper.Logger().Error("Failed to deposit to insurance fund",
+				"amount", insuranceFundShare.String(),
+				"error", err,
+			)
+		}
+	}
+
+	// Check for bankruptcy (loss exceeds margin - socialized loss scenario)
+	totalLoss := realizedPnL.Add(penalty)
+	if totalLoss.IsNegative() && totalLoss.Abs().GT(position.Margin) {
+		deficit := totalLoss.Abs().Sub(position.Margin)
+
+		// Try to cover with insurance fund
+		covered, remaining, _ := le.keeper.CoverDeficit(ctx, position.MarketID, deficit, liquidationID)
+
+		le.keeper.Logger().Info("Bankruptcy detected during liquidation",
+			"trader", position.Trader,
+			"market_id", position.MarketID,
+			"deficit", deficit.String(),
+			"covered_by_insurance", covered.String(),
+			"remaining", remaining.String(),
+		)
+
+		// If insurance fund cannot cover, trigger ADL
+		if remaining.IsPositive() && le.keeper.ShouldTriggerADL(ctx, remaining) {
+			adlResult, adlErr := le.keeper.ExecuteADL(ctx, position.MarketID, remaining, types.ADLTriggerLargeDeficit)
+			if adlErr != nil {
+				le.keeper.Logger().Error("ADL execution failed",
+					"error", adlErr,
+				)
+			} else if adlResult != nil {
+				le.keeper.Logger().Info("ADL executed",
+					"positions_affected", adlResult.PositionsAffected,
+					"deficit_covered", adlResult.DeficitCovered.String(),
+				)
+			}
+		}
+	}
 
 	// Delete the position
 	le.keeper.perpetualKeeper.DeletePosition(ctx, position.Trader, position.MarketID)

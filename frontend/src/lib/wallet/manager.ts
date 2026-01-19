@@ -20,6 +20,7 @@ import type {
   ChainConfig,
 } from './types';
 import { KeplrWallet, PERPDEX_CHAIN_CONFIG } from './keplr';
+import { MockWallet } from './mock';
 
 // Storage key for persisting wallet connection
 const STORAGE_KEY = 'perpdex_wallet';
@@ -29,6 +30,7 @@ const walletRegistry: Record<WalletProvider, new (config?: ChainConfig) => IWall
   keplr: KeplrWallet,
   metamask: KeplrWallet, // Placeholder - would have separate implementation
   walletconnect: KeplrWallet, // Placeholder - would have separate implementation
+  mock: MockWallet,
 };
 
 /**
@@ -78,6 +80,8 @@ export class WalletManager {
         return typeof window !== 'undefined' && !!window.ethereum;
       case 'walletconnect':
         return true; // WalletConnect is always available
+      case 'mock':
+        return true; // Mock is always available
       default:
         return false;
     }
@@ -87,7 +91,7 @@ export class WalletManager {
    * Get list of available wallet providers
    */
   getAvailableProviders(): WalletProvider[] {
-    const providers: WalletProvider[] = ['keplr', 'metamask', 'walletconnect'];
+    const providers: WalletProvider[] = ['keplr', 'metamask', 'walletconnect', 'mock'];
     return providers.filter((p) => this.isProviderAvailable(p));
   }
 

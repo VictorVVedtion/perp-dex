@@ -77,23 +77,23 @@ func TestFundingRateClamp(t *testing.T) {
 	config := types.DefaultFundingConfig()
 
 	tests := []struct {
-		name       string
-		priceDiff  math.LegacyDec // as percentage of index
+		name        string
+		priceDiff   math.LegacyDec // as percentage of index
 		wantClamped bool
 	}{
 		{
-			name:       "1% diff - not clamped",
-			priceDiff:  math.LegacyNewDecWithPrec(1, 2),
+			name:        "1% diff - not clamped",
+			priceDiff:   math.LegacyNewDecWithPrec(1, 2),
 			wantClamped: false,
 		},
 		{
-			name:       "15% diff - should clamp to max",
-			priceDiff:  math.LegacyNewDecWithPrec(15, 2), // 15% diff * 0.05 damping = 0.75% > 0.5%
+			name:        "15% diff - should clamp to max",
+			priceDiff:   math.LegacyNewDecWithPrec(15, 2), // 15% diff * 0.05 damping = 0.75% > 0.5%
 			wantClamped: true,
 		},
 		{
-			name:       "-15% diff - should clamp to min",
-			priceDiff:  math.LegacyNewDecWithPrec(-15, 2),
+			name:        "-15% diff - should clamp to min",
+			priceDiff:   math.LegacyNewDecWithPrec(-15, 2),
 			wantClamped: true,
 		},
 	}
@@ -161,13 +161,13 @@ func TestFundingPayment(t *testing.T) {
 }
 
 // TestFundingConfig tests default funding configuration
-// Updated for Hyperliquid alignment: 1h interval, ±0.5% max rate, 0.05 damping
+// Updated for settlement schedule: 8h interval, ±0.5% max rate, 0.05 damping
 func TestFundingConfig(t *testing.T) {
 	config := types.DefaultFundingConfig()
 
-	// Verify interval is 1 hour (3600 seconds)
-	if config.Interval != 3600 {
-		t.Errorf("expected interval 3600, got %d", config.Interval)
+	// Verify interval is 8 hours (28800 seconds)
+	if config.Interval != 28800 {
+		t.Errorf("expected interval 28800, got %d", config.Interval)
 	}
 
 	// Verify damping factor is 0.05
@@ -231,16 +231,16 @@ func TestFundingPayment_NewFundingPayment(t *testing.T) {
 }
 
 // TestFundingSettlementTiming tests funding settlement timing
-// Updated for 1 hour interval
+// Updated for 8 hour interval
 func TestFundingSettlementTiming(t *testing.T) {
 	config := types.DefaultFundingConfig()
 
 	// Set a base time
 	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	// Next funding should be 1 hour later
+	// Next funding should be 8 hours later
 	nextFunding := baseTime.Add(time.Duration(config.Interval) * time.Second)
-	expectedNext := time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC)
+	expectedNext := time.Date(2024, 1, 1, 8, 0, 0, 0, time.UTC)
 
 	if !nextFunding.Equal(expectedNext) {
 		t.Errorf("expected next funding at %v, got %v", expectedNext, nextFunding)

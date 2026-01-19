@@ -17,6 +17,7 @@ import type {
   Ticker,
   Orderbook,
   FundingRate,
+  KlineData,
 } from './types';
 
 // Default configuration
@@ -150,6 +151,50 @@ export class PerpDEXClient {
       { params: { limit } }
     );
     return response.data.history;
+  }
+
+  /**
+   * Get K-line (candlestick) data
+   * @param marketId - Market identifier (e.g., 'BTC-USDC')
+   * @param interval - Time interval ('1m', '5m', '15m', '30m', '1h', '4h', '1d')
+   * @param options - Optional parameters: from, to, limit
+   */
+  async getKlines(
+    marketId: string,
+    interval: string = '1m',
+    options?: {
+      from?: number;
+      to?: number;
+      limit?: number;
+    }
+  ): Promise<KlineData[]> {
+    const response = await this._http.get(`/v1/markets/${marketId}/klines`, {
+      params: {
+        interval,
+        from: options?.from,
+        to: options?.to,
+        limit: options?.limit || 200,
+      },
+    });
+    return response.data.klines;
+  }
+
+  /**
+   * Get latest K-lines
+   * @param marketId - Market identifier
+   * @param interval - Time interval
+   * @param limit - Number of candles to return
+   */
+  async getLatestKlines(
+    marketId: string,
+    interval: string = '1m',
+    limit: number = 200
+  ): Promise<KlineData[]> {
+    const response = await this._http.get(
+      `/v1/markets/${marketId}/klines/latest`,
+      { params: { interval, limit } }
+    );
+    return response.data.klines;
   }
 
   // ============ Account ============

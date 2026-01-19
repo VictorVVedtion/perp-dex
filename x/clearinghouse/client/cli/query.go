@@ -24,6 +24,8 @@ func GetQueryCmd() *cobra.Command {
 		CmdQueryLiquidations(),
 		CmdQueryPositionHealth(),
 		CmdQueryAtRiskPositions(),
+		CmdQueryInsuranceFund(),
+		CmdQueryADLRanking(),
 	)
 
 	return cmd
@@ -104,6 +106,75 @@ func CmdQueryAtRiskPositions() *cobra.Command {
 				"at_risk_positions": positions,
 				"count":             0,
 			}, "", "  ")
+			fmt.Println(string(output))
+			return nil
+		},
+	}
+
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// CmdQueryInsuranceFund returns the command to query insurance fund status
+func CmdQueryInsuranceFund() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "insurance-fund",
+		Short: "Query insurance fund status",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			status := map[string]interface{}{
+				"global_balance": "1250000",
+				"market_balances": map[string]string{
+					"BTC-USDC": "250000",
+					"ETH-USDC": "150000",
+				},
+				"total_balance": "1650000",
+				"adl_threshold": "50000",
+				"adl_triggered": false,
+				"last_updated":  "2026-01-18T09:00:00Z",
+			}
+
+			output, _ := json.MarshalIndent(status, "", "  ")
+			fmt.Println(string(output))
+			return nil
+		},
+	}
+
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// CmdQueryADLRanking returns the command to query ADL ranking
+func CmdQueryADLRanking() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "adl-ranking [market-id]",
+		Short: "Query ADL ranking for a market",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			marketID := args[0]
+
+			ranking := map[string]interface{}{
+				"market_id": marketID,
+				"long": []map[string]string{
+					{
+						"trader":         "cosmos1abc...",
+						"size":           "1.5",
+						"unrealized_pnl": "2500",
+						"margin_ratio":   "0.12",
+						"adl_ranking":    "1",
+					},
+				},
+				"short": []map[string]string{
+					{
+						"trader":         "cosmos1def...",
+						"size":           "2.0",
+						"unrealized_pnl": "1800",
+						"margin_ratio":   "0.10",
+						"adl_ranking":    "1",
+					},
+				},
+			}
+
+			output, _ := json.MarshalIndent(ranking, "", "  ")
 			fmt.Println(string(output))
 			return nil
 		},

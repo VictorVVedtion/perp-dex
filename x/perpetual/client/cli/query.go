@@ -22,6 +22,15 @@ type MarketInfo struct {
 	MakerFeeRate          string `json:"maker_fee_rate"`
 }
 
+// FundingInfo is a CLI-friendly funding info struct
+type FundingInfo struct {
+	MarketID         string `json:"market_id"`
+	CurrentRate      string `json:"current_rate"`
+	PredictedPayment string `json:"predicted_payment"`
+	NextSettlement   string `json:"next_settlement"`
+	LastSettlement   string `json:"last_settlement"`
+}
+
 // GetQueryCmd returns the cli query commands for the perpetual module
 func GetQueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -34,7 +43,9 @@ func GetQueryCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		CmdQueryMarket(),
+		CmdQueryMarkets(),
 		CmdQueryPrice(),
+		CmdQueryFunding(),
 		CmdQueryAccount(),
 		CmdQueryPosition(),
 		CmdQueryAllPositions(),
@@ -52,19 +63,29 @@ func CmdQueryMarket() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			marketID := args[0]
 
-			// For MVP, return static market config
-			market := MarketInfo{
-				MarketID:              marketID,
-				BaseAsset:             "BTC",
-				QuoteAsset:            "USDC",
-				MaxLeverage:           "10",
-				InitialMarginRate:     "0.1",
-				MaintenanceMarginRate: "0.05",
-				TakerFeeRate:          "0.0005",
-				MakerFeeRate:          "0.0002",
+			market, ok := findMarket(sampleMarkets(), marketID)
+			if !ok {
+				return fmt.Errorf("market not found: %s", marketID)
 			}
 
 			output, _ := json.MarshalIndent(market, "", "  ")
+			fmt.Println(string(output))
+			return nil
+		},
+	}
+
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// CmdQueryMarkets returns the command to query all markets
+func CmdQueryMarkets() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "markets",
+		Short: "Query all markets",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			markets := sampleMarkets()
+			output, _ := json.MarshalIndent(markets, "", "  ")
 			fmt.Println(string(output))
 			return nil
 		},
@@ -84,6 +105,33 @@ func CmdQueryPrice() *cobra.Command {
 			// For MVP testing, we'll query via RPC
 			fmt.Println("Price query requires running node connection")
 			fmt.Println("Use REST API: GET /perpdex/perpetual/v1/price/{market_id}")
+			return nil
+		},
+	}
+
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// CmdQueryFunding returns the command to query funding info
+func CmdQueryFunding() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "funding [market-id]",
+		Short: "Query funding rate information for a market",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			marketID := args[0]
+
+			info := FundingInfo{
+				MarketID:         marketID,
+				CurrentRate:      "0.0008",
+				PredictedPayment: "40.0",
+				NextSettlement:   "2026-01-18T08:00:00Z",
+				LastSettlement:   "2026-01-18T00:00:00Z",
+			}
+
+			output, _ := json.MarshalIndent(info, "", "  ")
+			fmt.Println(string(output))
 			return nil
 		},
 	}
@@ -124,6 +172,50 @@ func CmdQueryPosition() *cobra.Command {
 
 	flags.AddQueryFlagsToCmd(cmd)
 	return cmd
+}
+
+func sampleMarkets() []MarketInfo {
+	return []MarketInfo{
+		{
+			MarketID:              "BTC-USDC",
+			BaseAsset:             "BTC",
+			QuoteAsset:            "USDC",
+			MaxLeverage:           "50",
+			InitialMarginRate:     "0.05",
+			MaintenanceMarginRate: "0.025",
+			TakerFeeRate:          "0.0005",
+			MakerFeeRate:          "0.0002",
+		},
+		{
+			MarketID:              "ETH-USDC",
+			BaseAsset:             "ETH",
+			QuoteAsset:            "USDC",
+			MaxLeverage:           "50",
+			InitialMarginRate:     "0.05",
+			MaintenanceMarginRate: "0.025",
+			TakerFeeRate:          "0.0005",
+			MakerFeeRate:          "0.0002",
+		},
+		{
+			MarketID:              "SOL-USDC",
+			BaseAsset:             "SOL",
+			QuoteAsset:            "USDC",
+			MaxLeverage:           "25",
+			InitialMarginRate:     "0.05",
+			MaintenanceMarginRate: "0.025",
+			TakerFeeRate:          "0.0005",
+			MakerFeeRate:          "0.0002",
+		},
+	}
+}
+
+func findMarket(markets []MarketInfo, marketID string) (MarketInfo, bool) {
+	for _, market := range markets {
+		if market.MarketID == marketID {
+			return market, true
+		}
+	}
+	return MarketInfo{}, false
 }
 
 // CmdQueryAllPositions returns the command to query all positions

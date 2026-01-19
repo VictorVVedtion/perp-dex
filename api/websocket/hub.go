@@ -2,10 +2,10 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"sync"
 	"time"
-
-	"cosmossdk.io/math"
 )
 
 // Hub maintains the set of active clients and broadcasts messages
@@ -354,70 +354,70 @@ type WSMessage struct {
 
 // TickerMessage represents a ticker update
 type TickerMessage struct {
-	MarketID    string         `json:"market_id"`
-	MarkPrice   math.LegacyDec `json:"mark_price"`
-	IndexPrice  math.LegacyDec `json:"index_price"`
-	LastPrice   math.LegacyDec `json:"last_price"`
-	High24h     math.LegacyDec `json:"high_24h"`
-	Low24h      math.LegacyDec `json:"low_24h"`
-	Volume24h   math.LegacyDec `json:"volume_24h"`
-	Change24h   math.LegacyDec `json:"change_24h"`
-	FundingRate math.LegacyDec `json:"funding_rate"`
-	NextFunding int64          `json:"next_funding"`
-	Timestamp   int64          `json:"timestamp"`
+	MarketID    string `json:"market_id"`
+	MarkPrice   string `json:"mark_price"`
+	IndexPrice  string `json:"index_price"`
+	LastPrice   string `json:"last_price"`
+	High24h     string `json:"high_24h"`
+	Low24h      string `json:"low_24h"`
+	Volume24h   string `json:"volume_24h"`
+	Change24h   string `json:"change_24h"`
+	FundingRate string `json:"funding_rate"`
+	NextFunding int64  `json:"next_funding"`
+	Timestamp   int64  `json:"timestamp"`
 }
 
 // DepthMessage represents orderbook depth
 type DepthMessage struct {
-	MarketID  string           `json:"market_id"`
-	Bids      []PriceLevel     `json:"bids"`
-	Asks      []PriceLevel     `json:"asks"`
-	Timestamp int64            `json:"timestamp"`
+	MarketID  string       `json:"market_id"`
+	Bids      []PriceLevel `json:"bids"`
+	Asks      []PriceLevel `json:"asks"`
+	Timestamp int64        `json:"timestamp"`
 }
 
 // PriceLevel represents a price level in the orderbook
 type PriceLevel struct {
-	Price    math.LegacyDec `json:"price"`
-	Quantity math.LegacyDec `json:"quantity"`
+	Price    string `json:"price"`
+	Quantity string `json:"quantity"`
 }
 
 // TradeMessage represents a trade
 type TradeMessage struct {
-	TradeID   string         `json:"trade_id"`
-	MarketID  string         `json:"market_id"`
-	Price     math.LegacyDec `json:"price"`
-	Quantity  math.LegacyDec `json:"quantity"`
-	Side      string         `json:"side"` // "buy" or "sell"
-	Timestamp int64          `json:"timestamp"`
+	TradeID   string `json:"trade_id"`
+	MarketID  string `json:"market_id"`
+	Price     string `json:"price"`
+	Quantity  string `json:"quantity"`
+	Side      string `json:"side"` // "buy" or "sell"
+	Timestamp int64  `json:"timestamp"`
 }
 
 // PositionMessage represents a position update
 type PositionMessage struct {
-	Trader        string         `json:"trader"`
-	MarketID      string         `json:"market_id"`
-	Side          string         `json:"side"`
-	Size          math.LegacyDec `json:"size"`
-	EntryPrice    math.LegacyDec `json:"entry_price"`
-	MarkPrice     math.LegacyDec `json:"mark_price"`
-	UnrealizedPnL math.LegacyDec `json:"unrealized_pnl"`
-	Margin        math.LegacyDec `json:"margin"`
-	Leverage      math.LegacyDec `json:"leverage"`
-	LiquidationPrice math.LegacyDec `json:"liquidation_price"`
-	Timestamp     int64          `json:"timestamp"`
+	Trader           string `json:"trader"`
+	MarketID         string `json:"market_id"`
+	Side             string `json:"side"`
+	Size             string `json:"size"`
+	EntryPrice       string `json:"entry_price"`
+	MarkPrice        string `json:"mark_price"`
+	UnrealizedPnL    string `json:"unrealized_pnl"`
+	Margin           string `json:"margin"`
+	Leverage         string `json:"leverage"`
+	LiquidationPrice string `json:"liquidation_price"`
+	Timestamp        int64  `json:"timestamp"`
 }
 
 // OrderMessage represents an order update
 type OrderMessage struct {
-	OrderID       string         `json:"order_id"`
-	MarketID      string         `json:"market_id"`
-	Trader        string         `json:"trader"`
-	Side          string         `json:"side"`
-	Type          string         `json:"type"`
-	Price         math.LegacyDec `json:"price"`
-	Size          math.LegacyDec `json:"size"`
-	FilledSize    math.LegacyDec `json:"filled_size"`
-	Status        string         `json:"status"`
-	Timestamp     int64          `json:"timestamp"`
+	OrderID    string `json:"order_id"`
+	MarketID   string `json:"market_id"`
+	Trader     string `json:"trader"`
+	Side       string `json:"side"`
+	Type       string `json:"type"`
+	Price      string `json:"price"`
+	Size       string `json:"size"`
+	FilledSize string `json:"filled_size"`
+	Status     string `json:"status"`
+	Timestamp  int64  `json:"timestamp"`
 }
 
 // GetClientCount returns the number of connected clients
@@ -442,4 +442,54 @@ func (h *Hub) GetChannelClientCount(channel string) int {
 		return len(clients)
 	}
 	return 0
+}
+
+// ServeWS handles WebSocket upgrade requests
+func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+
+	clientID := r.URL.Query().Get("client_id")
+	if clientID == "" {
+		clientID = generateID()
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	ip := getClientIPFromRequest(r)
+
+	client := NewClient(h, conn, clientID, userID, ip)
+
+	h.register <- client
+
+	go client.writePump()
+	go client.readPump()
+}
+
+// Helper function to get client IP
+func getClientIPFromRequest(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		for i := 0; i < len(xff); i++ {
+			if xff[i] == ',' {
+				return xff[:i]
+			}
+		}
+		return xff
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	ip := r.RemoteAddr
+	for i := len(ip) - 1; i >= 0; i-- {
+		if ip[i] == ':' {
+			return ip[:i]
+		}
+	}
+	return ip
+}
+
+// Generate a simple ID
+func generateID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

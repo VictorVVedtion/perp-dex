@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import { useTradingStore, mockAccount } from '@/stores/tradingStore';
 import { useWallet } from '@/hooks/useWallet';
+import { useToast } from '@/contexts/ToastContext';
 import { OrderConfirmModal } from './OrderConfirmModal';
 import BigNumber from 'bignumber.js';
 
@@ -34,7 +35,8 @@ export function TradeForm() {
     calculateMargin,
   } = useTradingStore();
 
-  const { connected, address, signAndBroadcast } = useWallet();
+  const { connected, address, isMockMode, signAndBroadcast } = useWallet();
+  const { showToast } = useToast();
 
   // Local state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -143,8 +145,16 @@ export function TradeForm() {
 
       // Check result
       if (result.code === 0) {
-        setSuccess(`订单已提交! 交易哈希: ${result.transactionHash.slice(0, 16)}...`);
+        const txHashShort = result.transactionHash.slice(0, 16);
+        setSuccess(`订单已提交! 交易哈希: ${txHashShort}...`);
         setShowConfirmModal(false);
+
+        // Show success toast
+        showToast({
+          type: 'success',
+          title: isMockMode ? '模拟订单已提交' : '订单已提交',
+          message: `TxHash: ${txHashShort}...`,
+        });
 
         // Reset form
         setQuantity('');
@@ -156,7 +166,15 @@ export function TradeForm() {
       }
     } catch (err: any) {
       console.error('Order submission error:', err);
-      setError(err.message || '订单提交失败');
+      const errorMsg = err.message || '订单提交失败';
+      setError(errorMsg);
+
+      // Show error toast
+      showToast({
+        type: 'error',
+        title: '订单提交失败',
+        message: errorMsg,
+      });
     } finally {
       setIsSubmitting(false);
     }

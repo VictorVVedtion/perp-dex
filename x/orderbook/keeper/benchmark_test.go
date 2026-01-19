@@ -16,8 +16,8 @@ import (
 
 	"cosmossdk.io/store"
 	"cosmossdk.io/store/metrics"
-	dbm "github.com/cosmos/cosmos-db"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 )
 
 // mockBenchPerpetualKeeper is a mock implementation for benchmarks
@@ -30,6 +30,10 @@ func (m *mockBenchPerpetualKeeper) GetMarket(ctx sdk.Context, marketID string) *
 		MakerFeeRate:  math.LegacyNewDecWithPrec(5, 5),  // 0.005%
 		InitialMargin: math.LegacyNewDecWithPrec(10, 2), // 10%
 	}
+}
+
+func (m *mockBenchPerpetualKeeper) GetMarkPrice(ctx sdk.Context, marketID string) (math.LegacyDec, bool) {
+	return math.LegacyNewDec(50000), true
 }
 
 func (m *mockBenchPerpetualKeeper) UpdatePosition(ctx sdk.Context, trader, marketID string, side types.Side, qty, price, fee interface{}) error {

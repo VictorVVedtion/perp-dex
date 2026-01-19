@@ -1,12 +1,14 @@
 /**
  * TradingView-style Chart Component
  * Uses lightweight-charts library for professional trading charts
+ * Supports both real API data and mock data for development
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { useTradingStore } from '@/stores/tradingStore';
+import { config } from '@/lib/config';
 
 // K-line intervals
 type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
@@ -16,10 +18,24 @@ interface ChartProps {
   height?: number;
 }
 
-// Simulated K-line data for development
-const generateMockKlines = (count: number = 100): CandlestickData[] => {
+interface KlineApiResponse {
+  market_id: string;
+  interval: string;
+  klines: {
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    turnover: number;
+  }[];
+}
+
+// Simulated K-line data for development (fallback)
+const generateMockKlines = (count: number = 200, basePrice: number = 50000): CandlestickData[] => {
   const klines: CandlestickData[] = [];
-  let basePrice = 50000;
+  let price = basePrice;
   const now = Math.floor(Date.now() / 1000);
   const interval = 60; // 1 minute
 
@@ -27,8 +43,8 @@ const generateMockKlines = (count: number = 100): CandlestickData[] => {
     const time = (now - i * interval) as Time;
     const volatility = 0.002; // 0.2%
     const change = (Math.random() - 0.5) * 2 * volatility;
-    const open = basePrice;
-    const close = basePrice * (1 + change);
+    const open = price;
+    const close = price * (1 + change);
     const high = Math.max(open, close) * (1 + Math.random() * volatility);
     const low = Math.min(open, close) * (1 - Math.random() * volatility);
 
@@ -40,11 +56,41 @@ const generateMockKlines = (count: number = 100): CandlestickData[] => {
       close,
     });
 
-    basePrice = close;
+    price = close;
   }
 
   return klines;
 };
+
+// Fetch K-lines from API
+async function fetchKlines(
+  marketId: string,
+  interval: Interval,
+  limit: number = 200
+): Promise<CandlestickData[]> {
+  try {
+    const response = await fetch(
+      `${config.api.baseUrl}/v1/markets/${marketId}/klines/latest?interval=${interval}&limit=${limit}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data: KlineApiResponse = await response.json();
+
+    return data.klines.map((k) => ({
+      time: k.time as Time,
+      open: k.open,
+      high: k.high,
+      low: k.low,
+      close: k.close,
+    }));
+  } catch (error) {
+    console.warn('Failed to fetch klines from API, using mock data:', error);
+    return generateMockKlines(limit);
+  }
+}
 
 export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -52,8 +98,28 @@ export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [interval, setInterval] = useState<Interval>('1m');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const { ticker, wsConnected } = useTradingStore();
+  const { ticker, wsConnected, wsClient } = useTradingStore();
+
+  // Load K-line data
+  const loadKlines = useCallback(async (selectedInterval: Interval) => {
+    if (!candlestickSeriesRef.current) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const klines = await fetchKlines(marketId, selectedInterval);
+      candlestickSeriesRef.current.setData(klines);
+      chartRef.current?.timeScale().fitContent();
+    } catch (err) {
+      setError('Failed to load chart data');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [marketId]);
 
   // Initialize chart
   useEffect(() => {
@@ -111,12 +177,7 @@ export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
     candlestickSeriesRef.current = candlestickSeries;
 
     // Load initial data
-    const mockData = generateMockKlines(200);
-    candlestickSeries.setData(mockData);
-    setIsLoading(false);
-
-    // Fit content
-    chart.timeScale().fitContent();
+    loadKlines(interval);
 
     // Handle resize
     const handleResize = () => {
@@ -135,9 +196,36 @@ export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
       chartRef.current = null;
       candlestickSeriesRef.current = null;
     };
-  }, [height]);
+  }, [height, loadKlines, interval]);
 
-  // Update chart with real-time data
+  // Subscribe to real-time trades for chart updates
+  useEffect(() => {
+    if (!wsClient || !wsConnected || !candlestickSeriesRef.current) return;
+
+    const handleTrade = (trade: { price: string; timestamp: number }) => {
+      if (!candlestickSeriesRef.current) return;
+
+      const price = parseFloat(trade.price);
+      const time = Math.floor(trade.timestamp / 1000) as Time;
+
+      // Update the latest candle
+      candlestickSeriesRef.current.update({
+        time,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+      });
+    };
+
+    wsClient.subscribe(`trades:${marketId}`, handleTrade);
+
+    return () => {
+      wsClient.unsubscribe(`trades:${marketId}`, handleTrade);
+    };
+  }, [wsClient, wsConnected, marketId]);
+
+  // Update chart with ticker data
   useEffect(() => {
     if (!candlestickSeriesRef.current || !ticker?.lastPrice) return;
 
@@ -167,17 +255,8 @@ export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
 
   const handleIntervalChange = useCallback((newInterval: Interval) => {
     setInterval(newInterval);
-    setIsLoading(true);
-
-    // Reload data for new interval
-    if (candlestickSeriesRef.current) {
-      const mockData = generateMockKlines(200);
-      candlestickSeriesRef.current.setData(mockData);
-      chartRef.current?.timeScale().fitContent();
-    }
-
-    setIsLoading(false);
-  }, []);
+    loadKlines(newInterval);
+  }, [loadKlines]);
 
   return (
     <div className="bg-dark-900 rounded-lg border border-dark-700 h-full flex flex-col">
@@ -237,6 +316,19 @@ export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
                 />
               </svg>
               <span className="text-sm text-dark-400">Loading chart...</span>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-dark-900/80 z-10">
+            <div className="text-center">
+              <p className="text-sm text-danger-400">{error}</p>
+              <button
+                onClick={() => loadKlines(interval)}
+                className="mt-2 px-3 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-500"
+              >
+                Retry
+              </button>
             </div>
           </div>
         )}

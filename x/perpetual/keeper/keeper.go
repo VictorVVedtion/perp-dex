@@ -117,6 +117,8 @@ func (k *Keeper) InitDefaultMarket(ctx sdk.Context) {
 	// Set initial price
 	price := types.NewPriceInfo("BTC-USDC", math.LegacyNewDec(50000))
 	k.SetPrice(ctx, price)
+
+	k.SetNextFundingTime(ctx, market.MarketID, nextFundingTimeUTC(ctx.BlockTime()))
 }
 
 // ============ Position Operations ============
