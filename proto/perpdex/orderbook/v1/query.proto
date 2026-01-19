@@ -1,0 +1,77 @@
+syntax = "proto3";
+package perpdex.orderbook.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/orderbook/types";
+
+import "google/api/annotations.proto";
+import "perpdex/orderbook/v1/types.proto";
+
+// Query defines the orderbook Query service
+service Query {
+  // OrderBook returns the order book for a market
+  rpc OrderBook(QueryOrderBookRequest) returns (QueryOrderBookResponse) {
+    option (google.api.http).get = "/perpdex/orderbook/v1/orderbook/{market_id}";
+  }
+
+  // Order returns a specific order by ID
+  rpc Order(QueryOrderRequest) returns (QueryOrderResponse) {
+    option (google.api.http).get = "/perpdex/orderbook/v1/order/{order_id}";
+  }
+
+  // Orders returns all orders for a trader
+  rpc Orders(QueryOrdersRequest) returns (QueryOrdersResponse) {
+    option (google.api.http).get = "/perpdex/orderbook/v1/orders/{trader}";
+  }
+
+  // Trades returns recent trades for a market
+  rpc Trades(QueryTradesRequest) returns (QueryTradesResponse) {
+    option (google.api.http).get = "/perpdex/orderbook/v1/trades/{market_id}";
+  }
+}
+
+// QueryOrderBookRequest is the request for the OrderBook query
+message QueryOrderBookRequest {
+  string market_id = 1;
+  uint32 depth = 2; // number of price levels, default 20
+}
+
+// QueryOrderBookResponse is the response for the OrderBook query
+message QueryOrderBookResponse {
+  OrderBook order_book = 1;
+  string best_bid = 2;
+  string best_ask = 3;
+  string spread = 4;
+}
+
+// QueryOrderRequest is the request for the Order query
+message QueryOrderRequest {
+  string order_id = 1;
+}
+
+// QueryOrderResponse is the response for the Order query
+message QueryOrderResponse {
+  Order order = 1;
+}
+
+// QueryOrdersRequest is the request for the Orders query
+message QueryOrdersRequest {
+  string trader = 1;
+  string market_id = 2; // optional filter
+  OrderStatus status = 3; // optional filter
+}
+
+// QueryOrdersResponse is the response for the Orders query
+message QueryOrdersResponse {
+  repeated Order orders = 1;
+}
+
+// QueryTradesRequest is the request for the Trades query
+message QueryTradesRequest {
+  string market_id = 1;
+  uint32 limit = 2; // default 50
+}
+
+// QueryTradesResponse is the response for the Trades query
+message QueryTradesResponse {
+  repeated Trade trades = 1;
+}

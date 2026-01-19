@@ -1,0 +1,190 @@
+# PerpDEX Fast Consensus Configuration
+# Optimized for high-frequency trading with sub-second block times
+#
+# This configuration prioritizes:
+# - Low latency order execution
+# - High transaction throughput
+# - Fast block finality
+#
+# WARNING: These settings are aggressive and may not be suitable for all deployments.
+# For production networks with many validators, consider using more conservative values.
+
+#######################################################
+###           Consensus Configuration               ###
+#######################################################
+[consensus]
+
+# How long we wait for a proposal block before prevoting nil
+timeout_propose = "500ms"
+# How much timeout_propose increases with each round
+timeout_propose_delta = "100ms"
+
+# How long we wait after receiving +2/3 prevotes for anything
+timeout_prevote = "500ms"
+# How much timeout_prevote increases with each round
+timeout_prevote_delta = "100ms"
+
+# How long we wait after receiving +2/3 precommits for anything
+timeout_precommit = "500ms"
+# How much timeout_precommit increases with each round
+timeout_precommit_delta = "100ms"
+
+# How long we wait after committing a block, before starting on the new height
+# This is the KEY parameter for block time
+# Aggressive: 500ms for single validator / low-latency network
+# Conservative: 1s-2s for multi-validator production
+timeout_commit = "500ms"
+
+# Make progress as soon as we have all the precommits (don't wait for timeout)
+skip_timeout_commit = false
+
+# Create empty blocks at regular intervals
+# Set to true for consistent block times
+create_empty_blocks = true
+# Interval between empty blocks
+create_empty_blocks_interval = "0s"
+
+# Reactor sleep duration parameters
+# Lower values = faster processing but more CPU usage
+peer_gossip_sleep_duration = "10ms"
+peer_query_maj23_sleep_duration = "200ms"
+
+#######################################################
+###           Mempool Configuration                 ###
+#######################################################
+[mempool]
+
+# Mempool version: "v0" for FIFO mempool, "v1" for priority mempool
+version = "v1"
+
+# Enable/disable recheck of each remaining transaction after commit
+recheck = true
+
+# Broadcast transactions to other peers
+broadcast = true
+
+# Size of the mempool - maximum number of transactions
+size = 10000
+
+# Maximum size of a single transaction
+max_tx_bytes = 10485760
+
+# Limit the total size of all txs in the mempool
+# This can prevent memory exhaustion attacks
+max_txs_bytes = 104857600
+
+# Size of the cache (used to filter already seen transactions)
+cache_size = 20000
+
+# Do not remove invalid transactions from the cache
+# This prevents re-checking of invalid transactions
+keep-invalid-txs-in-cache = false
+
+# Maximum size of a batch of transactions to send to a peer
+# Smaller batches = lower latency for single txs
+# Larger batches = better throughput for bulk txs
+max_batch_bytes = 0
+
+#######################################################
+###           P2P Configuration                     ###
+#######################################################
+[p2p]
+
+# Address to listen for incoming connections
+laddr = "tcp://0.0.0.0:26656"
+
+# Time to wait before flushing messages out on the connection
+flush_throttle_timeout = "10ms"
+
+# Maximum size of a message packet payload, in bytes
+max_packet_msg_payload_size = 10240
+
+# Rate at which packets can be sent, in bytes/second
+send_rate = 20480000
+
+# Rate at which packets can be received, in bytes/second
+recv_rate = 20480000
+
+# Maximum number of inbound peers
+max_num_inbound_peers = 100
+
+# Maximum number of outbound peers to connect to, excluding persistent peers
+max_num_outbound_peers = 50
+
+# Toggle to disable guard against peers connecting from the same ip
+allow_duplicate_ip = false
+
+# Peer connection configuration
+handshake_timeout = "5s"
+dial_timeout = "3s"
+
+#######################################################
+###           RPC Server Configuration              ###
+#######################################################
+[rpc]
+
+# TCP or UNIX socket address for the RPC server to listen on
+laddr = "tcp://127.0.0.1:26657"
+
+# Maximum number of simultaneous connections
+max_open_connections = 1000
+
+# Maximum number of unique clientIDs that can subscribe at a time
+max_subscription_clients = 200
+
+# Maximum number of unique queries a given client can have active at a time
+max_subscriptions_per_client = 10
+
+# Maximum size of request body, in bytes
+max_body_bytes = 10000000
+
+# Maximum size of request header, in bytes
+max_header_bytes = 1048576
+
+# Timeout for each RPC request
+timeout_broadcast_tx_commit = "5s"
+
+#######################################################
+###           Instrumentation Configuration         ###
+#######################################################
+[instrumentation]
+
+# Prometheus metrics served under /metrics on PrometheusListenAddr
+prometheus = true
+
+# Address to listen for Prometheus collector(s) connections
+prometheus_listen_addr = ":26660"
+
+# Maximum number of simultaneous connections
+max_open_connections = 10
+
+# Namespace for Prometheus metrics
+namespace = "perpdex"
+
+#######################################################
+###           Transaction Indexer Configuration     ###
+#######################################################
+[tx_index]
+
+# What indexer to use for transactions
+# "kv" (default) - key-value store (goleveldb)
+# "psql" - PostgreSQL indexer (requires postgres:// connection string)
+# "null" - no indexer
+indexer = "kv"
+
+#######################################################
+###           State Sync Configuration              ###
+#######################################################
+[statesync]
+
+# State sync rapidly bootstraps a new node by discovering, fetching, and restoring
+# a state machine snapshot from peers instead of fetching and replaying historical blocks.
+enable = false
+
+#######################################################
+###           Block Sync Configuration              ###
+#######################################################
+[blocksync]
+
+# Block Sync version (v0 = standard, v2 = experimental)
+version = "v0"

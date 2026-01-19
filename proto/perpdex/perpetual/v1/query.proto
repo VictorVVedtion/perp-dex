@@ -1,0 +1,99 @@
+syntax = "proto3";
+package perpdex.perpetual.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/perpetual/types";
+
+import "google/api/annotations.proto";
+import "perpdex/perpetual/v1/types.proto";
+
+// Query defines the perpetual Query service
+service Query {
+  // Account returns a trader's account information
+  rpc Account(QueryAccountRequest) returns (QueryAccountResponse) {
+    option (google.api.http).get = "/perpdex/perpetual/v1/account/{trader}";
+  }
+
+  // Position returns a trader's position in a market
+  rpc Position(QueryPositionRequest) returns (QueryPositionResponse) {
+    option (google.api.http).get = "/perpdex/perpetual/v1/position/{trader}/{market_id}";
+  }
+
+  // Positions returns all positions for a trader
+  rpc Positions(QueryPositionsRequest) returns (QueryPositionsResponse) {
+    option (google.api.http).get = "/perpdex/perpetual/v1/positions/{trader}";
+  }
+
+  // Market returns market configuration
+  rpc Market(QueryMarketRequest) returns (QueryMarketResponse) {
+    option (google.api.http).get = "/perpdex/perpetual/v1/market/{market_id}";
+  }
+
+  // Markets returns all markets
+  rpc Markets(QueryMarketsRequest) returns (QueryMarketsResponse) {
+    option (google.api.http).get = "/perpdex/perpetual/v1/markets";
+  }
+
+  // Price returns current price information
+  rpc Price(QueryPriceRequest) returns (QueryPriceResponse) {
+    option (google.api.http).get = "/perpdex/perpetual/v1/price/{market_id}";
+  }
+}
+
+// QueryAccountRequest is the request for Account query
+message QueryAccountRequest {
+  string trader = 1;
+}
+
+// QueryAccountResponse is the response for Account query
+message QueryAccountResponse {
+  Account account = 1;
+}
+
+// QueryPositionRequest is the request for Position query
+message QueryPositionRequest {
+  string trader = 1;
+  string market_id = 2;
+}
+
+// QueryPositionResponse is the response for Position query
+message QueryPositionResponse {
+  Position position = 1;
+}
+
+// QueryPositionsRequest is the request for Positions query
+message QueryPositionsRequest {
+  string trader = 1;
+}
+
+// QueryPositionsResponse is the response for Positions query
+message QueryPositionsResponse {
+  repeated Position positions = 1;
+}
+
+// QueryMarketRequest is the request for Market query
+message QueryMarketRequest {
+  string market_id = 1;
+}
+
+// QueryMarketResponse is the response for Market query
+message QueryMarketResponse {
+  Market market = 1;
+}
+
+// QueryMarketsRequest is the request for Markets query
+message QueryMarketsRequest {}
+
+// QueryMarketsResponse is the response for Markets query
+message QueryMarketsResponse {
+  repeated Market markets = 1;
+}
+
+// QueryPriceRequest is the request for Price query
+message QueryPriceRequest {
+  string market_id = 1;
+}
+
+// QueryPriceResponse is the response for Price query
+message QueryPriceResponse {
+  PriceInfo price = 1;
+}

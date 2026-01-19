@@ -1,0 +1,43 @@
+syntax = "proto3";
+package perpdex.clearinghouse.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/clearinghouse/types";
+
+// LiquidationStatus represents the status of a liquidation
+enum LiquidationStatus {
+  LIQUIDATION_STATUS_UNSPECIFIED = 0;
+  LIQUIDATION_STATUS_PENDING = 1;
+  LIQUIDATION_STATUS_EXECUTED = 2;
+  LIQUIDATION_STATUS_FAILED = 3;
+}
+
+// Liquidation represents a liquidation event
+message Liquidation {
+  string liquidation_id = 1;
+  string trader = 2;
+  string market_id = 3;
+  string position_size = 4;
+  string entry_price = 5;
+  string mark_price = 6;
+  string liquidation_price = 7;
+  string margin_deficit = 8;     // how much below maintenance margin
+  string penalty = 9;            // liquidation penalty
+  LiquidationStatus status = 10;
+  int64 timestamp = 11;
+}
+
+// PositionHealth represents the health status of a position
+message PositionHealth {
+  string trader = 1;
+  string market_id = 2;
+  string margin_ratio = 3;       // current margin / required margin
+  string maintenance_margin = 4; // required maintenance margin
+  string account_equity = 5;     // current account equity
+  bool is_healthy = 6;           // true if above maintenance margin
+  bool at_risk = 7;              // true if close to liquidation
+}
+
+// GenesisState defines the clearinghouse module's genesis state
+message GenesisState {
+  repeated Liquidation liquidations = 1;
+}

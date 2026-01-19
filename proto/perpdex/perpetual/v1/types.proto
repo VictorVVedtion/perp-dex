@@ -1,0 +1,68 @@
+syntax = "proto3";
+package perpdex.perpetual.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/perpetual/types";
+
+// PositionSide represents the position direction
+enum PositionSide {
+  POSITION_SIDE_UNSPECIFIED = 0;
+  POSITION_SIDE_LONG = 1;
+  POSITION_SIDE_SHORT = 2;
+}
+
+// Market defines a perpetual trading market
+message Market {
+  string market_id = 1;              // e.g., "BTC-USDC"
+  string base_asset = 2;             // e.g., "BTC"
+  string quote_asset = 3;            // e.g., "USDC"
+  string max_leverage = 4;           // e.g., "10" (10x)
+  string initial_margin_rate = 5;    // e.g., "0.1" (10%)
+  string maintenance_margin_rate = 6; // e.g., "0.05" (5%)
+  string taker_fee_rate = 7;         // e.g., "0.0005" (0.05%)
+  string maker_fee_rate = 8;         // e.g., "0.0002" (0.02%)
+  string tick_size = 9;              // minimum price increment
+  string lot_size = 10;              // minimum quantity increment
+  bool is_active = 11;
+}
+
+// Position represents a trader's position in a market
+message Position {
+  string trader = 1;
+  string market_id = 2;
+  PositionSide side = 3;
+  string size = 4;           // position size in base asset
+  string entry_price = 5;    // average entry price
+  string margin = 6;         // deposited margin
+  string leverage = 7;       // effective leverage
+  string unrealized_pnl = 8; // current unrealized PnL
+  string liquidation_price = 9;
+  int64 opened_at = 10;
+  int64 updated_at = 11;
+}
+
+// Account represents a trader's margin account
+message Account {
+  string trader = 1;
+  string balance = 2;           // available balance (USDC)
+  string locked_margin = 3;     // margin locked in positions
+  string unrealized_pnl = 4;    // total unrealized PnL
+  string total_equity = 5;      // balance + unrealized_pnl
+  string margin_ratio = 6;      // current margin ratio
+}
+
+// PriceInfo represents the current price information
+message PriceInfo {
+  string market_id = 1;
+  string mark_price = 2;    // mark price for PnL calculation
+  string index_price = 3;   // index price (external reference)
+  string last_price = 4;    // last traded price
+  int64 timestamp = 5;
+}
+
+// GenesisState defines the perpetual module's genesis state
+message GenesisState {
+  repeated Market markets = 1;
+  repeated Position positions = 2;
+  repeated Account accounts = 3;
+  repeated PriceInfo prices = 4;
+}

@@ -1,0 +1,250 @@
+# PerpDEX Alert Rules
+
+groups:
+  # ============ Node Health Alerts ============
+  - name: node_health
+    rules:
+      - alert: NodeDown
+        expr: up{job="perpdex-validators"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PerpDEX node {{ $labels.instance }} is down"
+          description: "Node {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      - alert: NodeNotSyncing
+        expr: cometbft_consensus_block_height - ignoring(job) group_left max(cometbft_consensus_block_height) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} is lagging behind"
+          description: "Node {{ $labels.instance }} is {{ $value }} blocks behind the highest block."
+
+      - alert: LowPeerCount
+        expr: cometbft_p2p_peers < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} has low peer count"
+          description: "Node {{ $labels.instance }} has only {{ $value }} peers connected."
+
+  # ============ Consensus Alerts ============
+  - name: consensus
+    rules:
+      - alert: ConsensusTimeout
+        expr: increase(cometbft_consensus_round_duration_seconds_count[5m]) < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consensus stalled on {{ $labels.instance }}"
+          description: "No new rounds in the last 5 minutes."
+
+      - alert: SlowBlockTime
+        expr: rate(cometbft_consensus_block_interval_seconds_sum[5m]) / rate(cometbft_consensus_block_interval_seconds_count[5m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow block times detected"
+          description: "Average block time is {{ $value }}s, expected < 5s."
+
+      - alert: MissedBlocks
+        expr: increase(cometbft_consensus_validators_power{status="byzantine"}[1h]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Byzantine validator detected"
+          description: "A validator is exhibiting byzantine behavior."
+
+  # ============ Performance Alerts ============
+  - name: performance
+    rules:
+      - alert: HighMatchingLatency
+        expr: histogram_quantile(0.95, rate(perpdex_matching_latency_ms_bucket[5m])) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High matching engine latency on {{ $labels.market_id }}"
+          description: "P95 matching latency is {{ $value }}ms, expected < 50ms."
+
+      - alert: HighOrderLatency
+        expr: histogram_quantile(0.99, rate(perpdex_orders_latency_ms_bucket[5m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High order processing latency"
+          description: "P99 order latency is {{ $value }}ms."
+
+      - alert: HighTxPoolSize
+        expr: perpdex_system_tx_pool_size > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transaction pool is growing"
+          description: "TX pool size is {{ $value }}, may indicate congestion."
+
+  # ============ Trading Alerts ============
+  - name: trading
+    rules:
+      - alert: HighLiquidationRate
+        expr: increase(perpdex_liquidations_total[1h]) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: "High liquidation rate on {{ $labels.market_id }}"
+          description: "{{ $value }} liquidations in the last hour."
+
+      - alert: LargeLiquidationDeficit
+        expr: increase(perpdex_liquidations_deficit_usdc[1h]) > 100000
+        labels:
+          severity: critical
+        annotations:
+          summary: "Large liquidation deficit detected"
+          description: "Liquidation deficit of ${{ $value }} in the last hour."
+
+      - alert: WideSpreads
+        expr: perpdex_orderbook_spread_bps > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wide spreads on {{ $labels.market_id }}"
+          description: "Bid-ask spread is {{ $value }} bps, expected < 100 bps."
+
+  # ============ Insurance Fund Alerts ============
+  - name: insurance_fund
+    rules:
+      - alert: LowInsuranceFundBalance
+        expr: perpdex_insurance_fund_balance_usdc < 50000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Insurance fund balance is low"
+          description: "Fund {{ $labels.fund_id }} has only ${{ $value }} remaining."
+
+      - alert: InsuranceFundCritical
+        expr: perpdex_insurance_fund_balance_usdc < 10000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Insurance fund critically low"
+          description: "Fund {{ $labels.fund_id }} has only ${{ $value }}. ADL may trigger."
+
+      - alert: ADLTriggered
+        expr: increase(perpdex_adl_events_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "ADL triggered on {{ $labels.market_id }}"
+          description: "Auto-deleveraging activated due to {{ $labels.reason }}."
+
+  # ============ Oracle Alerts ============
+  - name: oracle
+    rules:
+      - alert: OracleStale
+        expr: time() - perpdex_oracle_last_update_timestamp > 300
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Oracle price is stale for {{ $labels.market_id }}"
+          description: "Oracle has not updated for {{ $value }} seconds."
+
+      - alert: HighOracleDeviation
+        expr: perpdex_oracle_deviation > 0.02
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High oracle price deviation on {{ $labels.market_id }}"
+          description: "Price deviation between sources is {{ $value | humanizePercentage }}."
+
+      - alert: LowOracleSources
+        expr: perpdex_oracle_source_count < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low oracle source count for {{ $labels.market_id }}"
+          description: "Only {{ $value }} oracle sources active."
+
+  # ============ WebSocket Alerts ============
+  - name: websocket
+    rules:
+      - alert: WebSocketServerDown
+        expr: up{job="perpdex-websocket"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WebSocket server is down"
+          description: "WebSocket server has been unreachable for more than 1 minute."
+
+      - alert: HighWebSocketLatency
+        expr: histogram_quantile(0.95, rate(perpdex_websocket_message_latency_ms_bucket[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket message latency"
+          description: "P95 WebSocket latency is {{ $value }}ms."
+
+      - alert: TooManyConnections
+        expr: perpdex_websocket_connections_active > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of WebSocket connections"
+          description: "{{ $value }} active WebSocket connections."
+
+  # ============ API Alerts ============
+  - name: api
+    rules:
+      - alert: HighAPIErrorRate
+        expr: rate(perpdex_api_errors_total[5m]) / rate(perpdex_api_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }}."
+
+      - alert: HighRateLimitHits
+        expr: increase(perpdex_api_rate_limit_hits[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate limit hits"
+          description: "{{ $value }} rate limit hits in the last 5 minutes."
+
+  # ============ System Resource Alerts ============
+  - name: resources
+    rules:
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}GB."
+
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%."

@@ -1,0 +1,78 @@
+syntax = "proto3";
+package perpdex.orderbook.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/orderbook/types";
+
+// Side represents the order side
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BUY = 1;
+  SIDE_SELL = 2;
+}
+
+// OrderType represents the type of order
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  ORDER_TYPE_LIMIT = 1;
+  ORDER_TYPE_MARKET = 2;
+}
+
+// OrderStatus represents the current status of an order
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_OPEN = 1;
+  ORDER_STATUS_FILLED = 2;
+  ORDER_STATUS_PARTIALLY_FILLED = 3;
+  ORDER_STATUS_CANCELLED = 4;
+}
+
+// Order represents a trading order
+message Order {
+  string order_id = 1;
+  string trader = 2;
+  string market_id = 3;
+  Side side = 4;
+  OrderType order_type = 5;
+  string price = 6;      // sdk.Dec as string
+  string quantity = 7;   // sdk.Dec as string
+  string filled_qty = 8; // sdk.Dec as string
+  OrderStatus status = 9;
+  int64 created_at = 10;
+  int64 updated_at = 11;
+}
+
+// PriceLevel represents orders at a specific price
+message PriceLevel {
+  string price = 1;     // sdk.Dec as string
+  string quantity = 2;  // sdk.Dec as string
+  repeated string order_ids = 3;
+}
+
+// OrderBook represents the order book for a market
+message OrderBook {
+  string market_id = 1;
+  repeated PriceLevel bids = 2;  // buy orders, sorted descending by price
+  repeated PriceLevel asks = 3;  // sell orders, sorted ascending by price
+}
+
+// Trade represents an executed trade
+message Trade {
+  string trade_id = 1;
+  string market_id = 2;
+  string taker_order_id = 3;
+  string maker_order_id = 4;
+  string taker = 5;
+  string maker = 6;
+  Side taker_side = 7;
+  string price = 8;
+  string quantity = 9;
+  string taker_fee = 10;
+  string maker_fee = 11;
+  int64 timestamp = 12;
+}
+
+// GenesisState defines the orderbook module's genesis state
+message GenesisState {
+  repeated Order orders = 1;
+  repeated OrderBook order_books = 2;
+}

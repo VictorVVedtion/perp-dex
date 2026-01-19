@@ -1,0 +1,72 @@
+syntax = "proto3";
+package perpdex.clearinghouse.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/clearinghouse/types";
+
+import "google/api/annotations.proto";
+import "perpdex/clearinghouse/v1/types.proto";
+
+// Query defines the clearinghouse Query service
+service Query {
+  // PositionHealth returns the health status of a position
+  rpc PositionHealth(QueryPositionHealthRequest) returns (QueryPositionHealthResponse) {
+    option (google.api.http).get = "/perpdex/clearinghouse/v1/health/{trader}/{market_id}";
+  }
+
+  // AllPositionsHealth returns health status of all positions
+  rpc AllPositionsHealth(QueryAllPositionsHealthRequest) returns (QueryAllPositionsHealthResponse) {
+    option (google.api.http).get = "/perpdex/clearinghouse/v1/health";
+  }
+
+  // Liquidations returns liquidation history
+  rpc Liquidations(QueryLiquidationsRequest) returns (QueryLiquidationsResponse) {
+    option (google.api.http).get = "/perpdex/clearinghouse/v1/liquidations";
+  }
+
+  // AtRiskPositions returns positions close to liquidation
+  rpc AtRiskPositions(QueryAtRiskPositionsRequest) returns (QueryAtRiskPositionsResponse) {
+    option (google.api.http).get = "/perpdex/clearinghouse/v1/at-risk";
+  }
+}
+
+// QueryPositionHealthRequest is the request for PositionHealth query
+message QueryPositionHealthRequest {
+  string trader = 1;
+  string market_id = 2;
+}
+
+// QueryPositionHealthResponse is the response for PositionHealth query
+message QueryPositionHealthResponse {
+  PositionHealth health = 1;
+}
+
+// QueryAllPositionsHealthRequest is the request for AllPositionsHealth query
+message QueryAllPositionsHealthRequest {
+  bool only_unhealthy = 1; // filter for unhealthy positions only
+}
+
+// QueryAllPositionsHealthResponse is the response for AllPositionsHealth query
+message QueryAllPositionsHealthResponse {
+  repeated PositionHealth positions = 1;
+}
+
+// QueryLiquidationsRequest is the request for Liquidations query
+message QueryLiquidationsRequest {
+  string trader = 1;  // optional filter
+  uint32 limit = 2;   // default 50
+}
+
+// QueryLiquidationsResponse is the response for Liquidations query
+message QueryLiquidationsResponse {
+  repeated Liquidation liquidations = 1;
+}
+
+// QueryAtRiskPositionsRequest is the request for AtRiskPositions query
+message QueryAtRiskPositionsRequest {
+  string threshold = 1; // margin ratio threshold (e.g., "1.2" = 120% of maintenance)
+}
+
+// QueryAtRiskPositionsResponse is the response for AtRiskPositions query
+message QueryAtRiskPositionsResponse {
+  repeated PositionHealth positions = 1;
+}

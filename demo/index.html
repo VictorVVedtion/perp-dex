@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PerpDEX - 永续合约交易所 Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+        * { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --green: #3fb950;
+            --red: #f85149;
+            --blue: #58a6ff;
+            --yellow: #d29922;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .buy-btn {
+            background: linear-gradient(135deg, #3fb950 0%, #238636 100%);
+        }
+
+        .sell-btn {
+            background: linear-gradient(135deg, #f85149 0%, #da3633 100%);
+        }
+
+        .price-up { color: var(--green); }
+        .price-down { color: var(--red); }
+
+        .orderbook-row:hover {
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .depth-bar-ask {
+            background: linear-gradient(to left, rgba(248, 81, 73, 0.3), transparent);
+        }
+
+        .depth-bar-bid {
+            background: linear-gradient(to right, rgba(63, 185, 80, 0.3), transparent);
+        }
+
+        .glow-green {
+            box-shadow: 0 0 20px rgba(63, 185, 80, 0.3);
+        }
+
+        .glow-red {
+            box-shadow: 0 0 20px rgba(248, 81, 73, 0.3);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .trade-flash {
+            animation: flash 0.5s ease-out;
+        }
+
+        @keyframes flash {
+            0% { background: rgba(88, 166, 255, 0.3); }
+            100% { background: transparent; }
+        }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-[#30363d] px-6 py-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold">
+                        P
+                    </div>
+                    <span class="text-xl font-bold">PerpDEX</span>
+                </div>
+                <nav class="flex gap-4 text-sm">
+                    <a href="#" class="text-[#58a6ff] font-medium">交易</a>
+                    <a href="#" class="text-[#8b949e] hover:text-white">仓位</a>
+                    <a href="#" class="text-[#8b949e] hover:text-white">资产</a>
+                    <a href="#" class="text-[#8b949e] hover:text-white">历史</a>
+                </nav>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#21262d]">
+                    <div class="w-2 h-2 rounded-full bg-[#3fb950] pulse"></div>
+                    <span class="text-sm text-[#8b949e]">区块 #12,847</span>
+                </div>
+                <button class="px-4 py-2 rounded-lg bg-[#58a6ff] text-white font-medium text-sm hover:bg-[#79b8ff] transition">
+                    连接钱包
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex h-[calc(100vh-57px)]">
+        <!-- Left Panel: Chart & Trade History -->
+        <div class="flex-1 flex flex-col border-r border-[#30363d]">
+            <!-- Market Info Bar -->
+            <div class="flex items-center justify-between px-4 py-3 border-b border-[#30363d]">
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full bg-[#f7931a] flex items-center justify-center text-xs font-bold">₿</div>
+                        <div>
+                            <div class="font-semibold">BTC-USDC</div>
+                            <div class="text-xs text-[#8b949e]">永续合约</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold price-up" id="currentPrice">50,234.50</div>
+                        <div class="text-xs text-[#3fb950]">+2.34%</div>
+                    </div>
+                </div>
+                <div class="flex gap-6 text-sm">
+                    <div>
+                        <div class="text-[#8b949e]">24h 高</div>
+                        <div class="font-medium">51,200.00</div>
+                    </div>
+                    <div>
+                        <div class="text-[#8b949e]">24h 低</div>
+                        <div class="font-medium">49,100.00</div>
+                    </div>
+                    <div>
+                        <div class="text-[#8b949e]">24h 成交量</div>
+                        <div class="font-medium">1,234.56 BTC</div>
+                    </div>
+                    <div>
+                        <div class="text-[#8b949e]">资金费率</div>
+                        <div class="font-medium text-[#3fb950]">0.01%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Area -->
+            <div class="flex-1 p-4">
+                <canvas id="priceChart"></canvas>
+            </div>
+
+            <!-- Recent Trades -->
+            <div class="h-48 border-t border-[#30363d]">
+                <div class="px-4 py-2 border-b border-[#30363d] flex items-center justify-between">
+                    <span class="font-medium text-sm">最近成交</span>
+                    <span class="text-xs text-[#8b949e]">实时撮合中</span>
+                </div>
+                <div class="overflow-y-auto h-[calc(100%-40px)] scrollbar-thin" id="tradesList">
+                    <!-- Trades will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Panel: Order Book -->
+        <div class="w-72 border-r border-[#30363d] flex flex-col">
+            <div class="px-4 py-2 border-b border-[#30363d]">
+                <span class="font-medium text-sm">订单簿</span>
+            </div>
+
+            <!-- Header -->
+            <div class="grid grid-cols-3 px-4 py-2 text-xs text-[#8b949e] border-b border-[#30363d]">
+                <span>价格 (USDC)</span>
+                <span class="text-right">数量 (BTC)</span>
+                <span class="text-right">总计</span>
+            </div>
+
+            <!-- Asks (Sells) -->
+            <div class="flex-1 overflow-hidden flex flex-col-reverse" id="asksList">
+                <!-- Asks will be inserted here -->
+            </div>
+
+            <!-- Spread -->
+            <div class="px-4 py-2 border-y border-[#30363d] bg-[#21262d]">
+                <div class="flex items-center justify-between">
+                    <span class="text-lg font-bold price-up" id="spreadPrice">50,234.50</span>
+                    <span class="text-xs text-[#8b949e]">价差: <span class="text-[#d29922]">0.02%</span></span>
+                </div>
+            </div>
+
+            <!-- Bids (Buys) -->
+            <div class="flex-1 overflow-hidden" id="bidsList">
+                <!-- Bids will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Right Panel: Trade Form & Positions -->
+        <div class="w-80 flex flex-col">
+            <!-- Trade Form -->
+            <div class="p-4 border-b border-[#30363d]">
+                <div class="flex gap-2 mb-4">
+                    <button class="flex-1 py-2 rounded-lg buy-btn text-white font-medium text-sm" id="buyBtn">
+                        做多
+                    </button>
+                    <button class="flex-1 py-2 rounded-lg bg-[#21262d] text-[#8b949e] font-medium text-sm" id="sellBtn">
+                        做空
+                    </button>
+                </div>
+
+                <div class="flex gap-2 mb-4">
+                    <button class="flex-1 py-1.5 rounded text-xs bg-[#58a6ff] text-white">限价</button>
+                    <button class="flex-1 py-1.5 rounded text-xs bg-[#21262d] text-[#8b949e]">市价</button>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-[#8b949e] mb-1 block">价格 (USDC)</label>
+                        <input type="number" value="50234.50" class="w-full px-3 py-2 rounded-lg bg-[#21262d] border border-[#30363d] text-right mono focus:border-[#58a6ff] outline-none" id="priceInput">
+                    </div>
+                    <div>
+                        <label class="text-xs text-[#8b949e] mb-1 block">数量 (BTC)</label>
+                        <input type="number" value="0.1" step="0.01" class="w-full px-3 py-2 rounded-lg bg-[#21262d] border border-[#30363d] text-right mono focus:border-[#58a6ff] outline-none" id="quantityInput">
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 py-1 rounded text-xs bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]">25%</button>
+                        <button class="flex-1 py-1 rounded text-xs bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]">50%</button>
+                        <button class="flex-1 py-1 rounded text-xs bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]">75%</button>
+                        <button class="flex-1 py-1 rounded text-xs bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]">100%</button>
+                    </div>
+                    <div>
+                        <label class="text-xs text-[#8b949e] mb-1 block">杠杆</label>
+                        <div class="flex items-center gap-2">
+                            <input type="range" min="1" max="10" value="10" class="flex-1" id="leverageSlider">
+                            <span class="text-sm font-medium w-12 text-right" id="leverageValue">10x</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-3 rounded-lg bg-[#21262d] text-xs space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">订单价值</span>
+                        <span class="mono">5,023.45 USDC</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">所需保证金</span>
+                        <span class="mono">502.35 USDC</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">预估手续费</span>
+                        <span class="mono">2.51 USDC</span>
+                    </div>
+                </div>
+
+                <button class="w-full mt-4 py-3 rounded-lg buy-btn text-white font-semibold glow-green" id="submitBtn">
+                    做多 BTC-USDC
+                </button>
+            </div>
+
+            <!-- Positions -->
+            <div class="flex-1 overflow-y-auto">
+                <div class="px-4 py-2 border-b border-[#30363d] flex items-center justify-between">
+                    <span class="font-medium text-sm">当前仓位</span>
+                    <span class="text-xs text-[#8b949e]">1 个活跃</span>
+                </div>
+                <div class="p-4" id="positionsList">
+                    <div class="card p-3 mb-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded text-xs bg-[#238636] text-white">多</span>
+                                <span class="font-medium">BTC-USDC</span>
+                            </div>
+                            <span class="text-xs text-[#8b949e]">10x</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                                <span class="text-[#8b949e]">仓位大小</span>
+                                <div class="font-medium mono">0.5 BTC</div>
+                            </div>
+                            <div>
+                                <span class="text-[#8b949e]">开仓均价</span>
+                                <div class="font-medium mono">49,800.00</div>
+                            </div>
+                            <div>
+                                <span class="text-[#8b949e]">标记价格</span>
+                                <div class="font-medium mono">50,234.50</div>
+                            </div>
+                            <div>
+                                <span class="text-[#8b949e]">未实现盈亏</span>
+                                <div class="font-medium mono price-up">+217.25 (+0.87%)</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                            <button class="flex-1 py-1.5 rounded text-xs bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]">平仓</button>
+                            <button class="flex-1 py-1.5 rounded text-xs bg-[#21262d] text-[#8b949e] hover:bg-[#30363d]">调整</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Stats -->
+            <div class="p-4 border-t border-[#30363d] bg-[#161b22]">
+                <div class="text-xs text-[#8b949e] mb-2">引擎性能 (实时)</div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">撮合延迟</span>
+                        <span class="text-[#3fb950] mono" id="matchLatency">5.9 ms</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">TPS</span>
+                        <span class="text-[#3fb950] mono" id="tpsValue">12,847</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">出块时间</span>
+                        <span class="text-[#3fb950] mono">1.0s</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[#8b949e]">优化倍数</span>
+                        <span class="text-[#d29922] mono">334x</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Initialize price chart
+        const ctx = document.getElementById('priceChart').getContext('2d');
+
+        // Generate sample price data
+        const generatePriceData = () => {
+            const data = [];
+            let price = 50000;
+            const now = Date.now();
+            for (let i = 100; i >= 0; i--) {
+                price += (Math.random() - 0.48) * 100;
+                data.push({
+                    x: now - i * 60000,
+                    y: price
+                });
+            }
+            return data;
+        };
+
+        const priceData = generatePriceData();
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'BTC-USDC',
+                    data: priceData,
+                    borderColor: '#3fb950',
+                    backgroundColor: 'rgba(63, 185, 80, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        display: false
+                    },
+                    y: {
+                        position: 'right',
+                        grid: {
+                            color: '#21262d'
+                        },
+                        ticks: {
+                            color: '#8b949e',
+                            callback: (value) => value.toLocaleString()
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+
+        // Generate order book data
+        const generateOrderBook = () => {
+            const basePrice = 50234.50;
+            const asks = [];
+            const bids = [];
+
+            for (let i = 0; i < 10; i++) {
+                asks.push({
+                    price: basePrice + (i + 1) * 10 + Math.random() * 5,
+                    quantity: Math.random() * 2 + 0.1,
+                    total: 0
+                });
+                bids.push({
+                    price: basePrice - (i + 1) * 10 - Math.random() * 5,
+                    quantity: Math.random() * 2 + 0.1,
+                    total: 0
+                });
+            }
+
+            // Calculate totals
+            let askTotal = 0;
+            asks.reverse().forEach(a => {
+                askTotal += a.quantity;
+                a.total = askTotal;
+            });
+            asks.reverse();
+
+            let bidTotal = 0;
+            bids.forEach(b => {
+                bidTotal += b.quantity;
+                b.total = bidTotal;
+            });
+
+            return { asks, bids };
+        };
+
+        const renderOrderBook = () => {
+            const { asks, bids } = generateOrderBook();
+            const maxTotal = Math.max(
+                ...asks.map(a => a.total),
+                ...bids.map(b => b.total)
+            );
+
+            const asksList = document.getElementById('asksList');
+            const bidsList = document.getElementById('bidsList');
+
+            asksList.innerHTML = asks.map(a => `
+                <div class="orderbook-row grid grid-cols-3 px-4 py-1 text-xs relative">
+                    <div class="depth-bar-ask absolute inset-0" style="width: ${(a.total / maxTotal) * 100}%"></div>
+                    <span class="price-down relative mono">${a.price.toFixed(2)}</span>
+                    <span class="text-right relative mono">${a.quantity.toFixed(4)}</span>
+                    <span class="text-right relative mono text-[#8b949e]">${a.total.toFixed(4)}</span>
+                </div>
+            `).join('');
+
+            bidsList.innerHTML = bids.map(b => `
+                <div class="orderbook-row grid grid-cols-3 px-4 py-1 text-xs relative">
+                    <div class="depth-bar-bid absolute inset-0" style="width: ${(b.total / maxTotal) * 100}%"></div>
+                    <span class="price-up relative mono">${b.price.toFixed(2)}</span>
+                    <span class="text-right relative mono">${b.quantity.toFixed(4)}</span>
+                    <span class="text-right relative mono text-[#8b949e]">${b.total.toFixed(4)}</span>
+                </div>
+            `).join('');
+        };
+
+        // Generate recent trades
+        const generateTrade = () => {
+            const isBuy = Math.random() > 0.5;
+            const basePrice = 50234.50;
+            return {
+                price: basePrice + (Math.random() - 0.5) * 20,
+                quantity: Math.random() * 0.5 + 0.01,
+                side: isBuy ? 'buy' : 'sell',
+                time: new Date().toLocaleTimeString()
+            };
+        };
+
+        const trades = [];
+        for (let i = 0; i < 20; i++) {
+            trades.push(generateTrade());
+        }
+
+        const renderTrades = () => {
+            const tradesList = document.getElementById('tradesList');
+            tradesList.innerHTML = trades.slice(0, 15).map((t, i) => `
+                <div class="grid grid-cols-3 px-4 py-1 text-xs ${i === 0 ? 'trade-flash' : ''}">
+                    <span class="${t.side === 'buy' ? 'price-up' : 'price-down'} mono">${t.price.toFixed(2)}</span>
+                    <span class="text-right mono">${t.quantity.toFixed(4)}</span>
+                    <span class="text-right text-[#8b949e]">${t.time}</span>
+                </div>
+            `).join('');
+        };
+
+        // Update price
+        let currentPrice = 50234.50;
+        const updatePrice = () => {
+            currentPrice += (Math.random() - 0.48) * 10;
+            const priceEl = document.getElementById('currentPrice');
+            const spreadEl = document.getElementById('spreadPrice');
+            const formatted = currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            priceEl.textContent = formatted;
+            spreadEl.textContent = formatted;
+
+            // Update chart
+            priceData.push({ x: Date.now(), y: currentPrice });
+            if (priceData.length > 100) priceData.shift();
+            chart.update('none');
+        };
+
+        // Update performance metrics
+        const updateMetrics = () => {
+            const latency = (5 + Math.random() * 2).toFixed(1);
+            const tps = Math.floor(12000 + Math.random() * 2000);
+            document.getElementById('matchLatency').textContent = `${latency} ms`;
+            document.getElementById('tpsValue').textContent = tps.toLocaleString();
+        };
+
+        // Add new trade
+        const addTrade = () => {
+            trades.unshift(generateTrade());
+            if (trades.length > 50) trades.pop();
+            renderTrades();
+        };
+
+        // Buy/Sell button toggle
+        const buyBtn = document.getElementById('buyBtn');
+        const sellBtn = document.getElementById('sellBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        let isBuyMode = true;
+
+        buyBtn.addEventListener('click', () => {
+            isBuyMode = true;
+            buyBtn.className = 'flex-1 py-2 rounded-lg buy-btn text-white font-medium text-sm';
+            sellBtn.className = 'flex-1 py-2 rounded-lg bg-[#21262d] text-[#8b949e] font-medium text-sm';
+            submitBtn.className = 'w-full mt-4 py-3 rounded-lg buy-btn text-white font-semibold glow-green';
+            submitBtn.textContent = '做多 BTC-USDC';
+        });
+
+        sellBtn.addEventListener('click', () => {
+            isBuyMode = false;
+            sellBtn.className = 'flex-1 py-2 rounded-lg sell-btn text-white font-medium text-sm';
+            buyBtn.className = 'flex-1 py-2 rounded-lg bg-[#21262d] text-[#8b949e] font-medium text-sm';
+            submitBtn.className = 'w-full mt-4 py-3 rounded-lg sell-btn text-white font-semibold glow-red';
+            submitBtn.textContent = '做空 BTC-USDC';
+        });
+
+        // Leverage slider
+        const leverageSlider = document.getElementById('leverageSlider');
+        const leverageValue = document.getElementById('leverageValue');
+        leverageSlider.addEventListener('input', (e) => {
+            leverageValue.textContent = `${e.target.value}x`;
+        });
+
+        // Submit order animation
+        submitBtn.addEventListener('click', () => {
+            submitBtn.textContent = '提交中...';
+            submitBtn.disabled = true;
+
+            setTimeout(() => {
+                submitBtn.textContent = '✓ 订单已提交';
+                addTrade();
+
+                setTimeout(() => {
+                    submitBtn.textContent = isBuyMode ? '做多 BTC-USDC' : '做空 BTC-USDC';
+                    submitBtn.disabled = false;
+                }, 1000);
+            }, 300);
+        });
+
+        // Initial render
+        renderOrderBook();
+        renderTrades();
+
+        // Start updates
+        setInterval(updatePrice, 1000);
+        setInterval(renderOrderBook, 2000);
+        setInterval(addTrade, 3000);
+        setInterval(updateMetrics, 1500);
+    </script>
+</body>
+</html>
