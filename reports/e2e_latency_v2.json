@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-01-19T13:00:20-08:00",
+  "rest_api": {
+    "l2Book (BTC)": {
+      "name": "l2Book (BTC)",
+      "count": 30,
+      "min_ms": 150.904,
+      "max_ms": 330.864,
+      "avg_ms": 174.57450000000003,
+      "p50_ms": 161.795,
+      "p90_ms": 206.466,
+      "p99_ms": 218.707
+    },
+    "l2Book (ETH)": {
+      "name": "l2Book (ETH)",
+      "count": 30,
+      "min_ms": 147.326,
+      "max_ms": 275.491,
+      "avg_ms": 166.55793333333332,
+      "p50_ms": 156.04,
+      "p90_ms": 174.98,
+      "p99_ms": 274.237
+    },
+    "metaAndAssetCtxs": {
+      "name": "metaAndAssetCtxs",
+      "count": 30,
+      "min_ms": 179.095,
+      "max_ms": 727.185,
+      "avg_ms": 402.8161666666666,
+      "p50_ms": 411.977,
+      "p90_ms": 486.239,
+      "p99_ms": 625.148
+    },
+    "recentTrades (BTC)": {
+      "name": "recentTrades (BTC)",
+      "count": 30,
+      "min_ms": 156.552,
+      "max_ms": 315.572,
+      "avg_ms": 178.43646666666666,
+      "p50_ms": 170.099,
+      "p90_ms": 191.391,
+      "p99_ms": 211.041
+    }
+  },
+  "websocket": {
+    "allMids_messages": {
+      "name": "allMids_messages",
+      "count": 14,
+      "min_ms": 599.707,
+      "max_ms": 1440.193,
+      "avg_ms": 1028.5530714285717,
+      "p50_ms": 1019.218,
+      "p90_ms": 1100.707,
+      "p99_ms": 1255.37
+    },
+    "connection": {
+      "name": "connection",
+      "count": 10,
+      "min_ms": 338.361,
+      "max_ms": 675.189,
+      "avg_ms": 388.7296,
+      "p50_ms": 360.062,
+      "p90_ms": 372.437,
+      "p99_ms": 372.437
+    }
+  },
+  "summary": {}
+}
