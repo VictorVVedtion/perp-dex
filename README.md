@@ -446,6 +446,9 @@ clearinghouse:
 # Run all unit tests
 go test -v ./...
 
+# Run E2E integration tests
+go test -v ./tests/e2e/ -timeout 300s
+
 # Run with coverage
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
@@ -459,16 +462,44 @@ go test -bench=. -benchmem ./x/orderbook/keeper
 
 # Run specific benchmark
 go test -bench=BenchmarkNewMatching -benchmem ./x/orderbook/keeper
+
+# Run data structure comparison
+go test -bench="BenchmarkAddOrder|BenchmarkGetBest" -benchmem ./x/orderbook/keeper/
 ```
 
-### Test Modules
+### Run Stress Tests
 
-| Module | Tests | Status |
-|--------|-------|--------|
-| orderbook/keeper | 24 | Pass |
-| clearinghouse/keeper | 12 | Pass |
-| perpetual/keeper | 14 | Pass |
-| **Total** | **50** | **100%** |
+```bash
+# Run E2E stress tests
+go test -v -run "TestE2EStressAllImplementations" ./x/orderbook/keeper/ -timeout 600s
+
+# Run concurrent stress tests
+go test -v -run "TestE2EConcurrentStress" ./x/orderbook/keeper/
+
+# Run high read ratio tests
+go test -v -run "TestE2EHighReadRatio" ./x/orderbook/keeper/
+```
+
+### Test Categories
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| Unit Tests | 50+ | Core functionality |
+| E2E Tests | 15+ | API integration |
+| Benchmark | 20+ | Performance |
+| Stress Tests | 5 | High load scenarios |
+
+### Order Book Data Structures Comparison
+
+| Implementation | Throughput | P99 Latency | Memory | Status |
+|----------------|------------|-------------|--------|--------|
+| **B+ Tree** | 4.3M ops/s | 542 ns | 6.1 MB | **Recommended** |
+| Skip List | 2.6M ops/s | 1.7 μs | 9.2 MB | Current Default |
+| HashMap | 1.4M ops/s | 42 μs | 20 MB | Not Recommended |
+| ART | 2.9K ops/s | 70 μs | 13.5 MB | Not Recommended |
+
+> See [docs/TESTING.md](docs/TESTING.md) for detailed test documentation.
+> See [docs/E2E_STRESS_TEST_REPORT.md](docs/E2E_STRESS_TEST_REPORT.md) for stress test results.
 
 ---
 
