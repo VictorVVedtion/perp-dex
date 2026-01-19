@@ -16,7 +16,7 @@ func main() {
 	// Command line flags
 	host := flag.String("host", "0.0.0.0", "Server host")
 	port := flag.Int("port", 8080, "Server port")
-	mockMode := flag.Bool("mock", true, "Enable mock data mode")
+	mockMode := flag.Bool("mock", false, "Enable mock data mode (default: false for real mode)")
 	flag.Parse()
 
 	// Create configuration

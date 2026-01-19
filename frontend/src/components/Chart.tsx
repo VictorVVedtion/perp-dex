@@ -1,7 +1,7 @@
 /**
  * TradingView-style Chart Component
  * Uses lightweight-charts library for professional trading charts
- * Supports both real API data and mock data for development
+ * Supports Hyperliquid API for real data, with mock data fallback
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -9,6 +9,7 @@ import { createChart, CandlestickData, Time, CandlestickSeries } from 'lightweig
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { useTradingStore } from '@/stores/tradingStore';
 import { config } from '@/lib/config';
+import { getHyperliquidClient } from '@/lib/api/hyperliquid';
 
 // K-line intervals
 type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
@@ -62,12 +63,35 @@ const generateMockKlines = (count: number = 200, basePrice: number = 50000): Can
   return klines;
 };
 
-// Fetch K-lines from API
+// Fetch K-lines from Hyperliquid API or local API
 async function fetchKlines(
   marketId: string,
   interval: Interval,
   limit: number = 200
 ): Promise<CandlestickData[]> {
+  const useHyperliquid = config.features.useHyperliquid && !config.features.mockMode;
+
+  // Try Hyperliquid API first
+  if (useHyperliquid) {
+    try {
+      const hlClient = getHyperliquidClient();
+      const candles = await hlClient.getCandles(marketId, interval, limit);
+
+      if (candles.length > 0) {
+        return candles.map((c) => ({
+          time: c.time as Time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }));
+      }
+    } catch (error) {
+      console.warn('Failed to fetch klines from Hyperliquid, trying local API:', error);
+    }
+  }
+
+  // Try local API
   try {
     const response = await fetch(
       `${config.api.baseUrl}/v1/markets/${marketId}/klines/latest?interval=${interval}&limit=${limit}`
@@ -87,7 +111,7 @@ async function fetchKlines(
       close: k.close,
     }));
   } catch (error) {
-    console.warn('Failed to fetch klines from API, using mock data:', error);
+    console.warn('Failed to fetch klines from local API, using mock data:', error);
     return generateMockKlines(limit);
   }
 }
@@ -269,6 +293,9 @@ export function Chart({ marketId = 'BTC-USDC', height = 400 }: ChartProps) {
               <span className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-pulse" />
               <span>Live</span>
             </span>
+          )}
+          {config.features.useHyperliquid && !config.features.mockMode && (
+            <span className="text-xs text-dark-500 bg-dark-800 px-1.5 py-0.5 rounded">HL</span>
           )}
         </div>
 

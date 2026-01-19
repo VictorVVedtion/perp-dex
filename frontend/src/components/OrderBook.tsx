@@ -1,6 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import BigNumber from 'bignumber.js'
 import { useTradingStore, PriceLevel, mockOrderBook } from '@/stores/tradingStore'
+import { config } from '@/lib/config'
+import { getHyperliquidClient } from '@/lib/api/hyperliquid'
 
 interface OrderBookRowProps {
   price: string
@@ -43,9 +45,54 @@ function OrderBookRow({ price, quantity, total, side, maxTotal, onClick }: Order
   )
 }
 
-export function OrderBook() {
-  const { orderBook, setPrice } = useTradingStore()
-  const data = orderBook || mockOrderBook
+interface OrderBookProps {
+  marketId?: string
+}
+
+export function OrderBook({ marketId = 'BTC-USDC' }: OrderBookProps) {
+  const { orderBook, setPrice, wsConnected } = useTradingStore()
+  const [isLoading, setIsLoading] = useState(true)
+  const [localOrderBook, setLocalOrderBook] = useState(mockOrderBook)
+
+  const useHyperliquid = config.features.useHyperliquid && !config.features.mockMode
+
+  // Load initial orderbook from Hyperliquid API
+  useEffect(() => {
+    if (useHyperliquid) {
+      const loadOrderbook = async () => {
+        setIsLoading(true)
+        try {
+          const hlClient = getHyperliquidClient()
+          const hlOrderbook = await hlClient.getOrderbook(marketId)
+
+          if (hlOrderbook) {
+            const bestBid = hlOrderbook.bids[0]?.price || '0'
+            const bestAsk = hlOrderbook.asks[0]?.price || '0'
+            const spread = new BigNumber(bestAsk).minus(bestBid).toString()
+
+            setLocalOrderBook({
+              bids: hlOrderbook.bids,
+              asks: hlOrderbook.asks,
+              bestBid,
+              bestAsk,
+              spread,
+            })
+          }
+        } catch (error) {
+          console.error('Failed to load orderbook:', error)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+
+      loadOrderbook()
+    } else {
+      setIsLoading(false)
+    }
+  }, [marketId, useHyperliquid])
+
+  // Use store orderbook if available (from WebSocket), otherwise use local state
+  const data = orderBook || localOrderBook
 
   // Calculate running totals
   const asksWithTotals = useMemo(() => {
@@ -73,8 +120,19 @@ export function OrderBook() {
   return (
     <div className="bg-dark-900 rounded-lg border border-dark-700 h-full flex flex-col">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-dark-700">
-        <h3 className="text-sm font-medium text-white">Order Book</h3>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-dark-700">
+        <div className="flex items-center space-x-2">
+          <h3 className="text-sm font-medium text-white">Order Book</h3>
+          {wsConnected && (
+            <span className="flex items-center space-x-1 text-xs text-primary-400">
+              <span className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-pulse" />
+              <span>Live</span>
+            </span>
+          )}
+          {useHyperliquid && (
+            <span className="text-xs text-dark-500 bg-dark-800 px-1.5 py-0.5 rounded">HL</span>
+          )}
+        </div>
       </div>
 
       {/* Column Headers */}

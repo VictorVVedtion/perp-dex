@@ -1,11 +1,15 @@
 /**
  * Trading Store with WebSocket Integration
  * Manages trading state and real-time data updates
+ * Supports both local WebSocket and Hyperliquid API
  */
 
 import { create } from 'zustand';
 import BigNumber from 'bignumber.js';
 import { WSClient, Ticker, Orderbook, Trade } from '@/lib/websocket/client';
+import { HyperliquidWSClient, getHyperliquidWSClient } from '@/lib/websocket/hyperliquid';
+import { getHyperliquidClient, NormalizedTicker, NormalizedOrderbook, NormalizedTrade } from '@/lib/api/hyperliquid';
+import { config } from '@/lib/config';
 
 // Types
 export interface Order {
@@ -86,6 +90,7 @@ interface TradingState {
 
   // WebSocket state
   wsClient: WSClient | null;
+  hlWsClient: HyperliquidWSClient | null;
   wsConnected: boolean;
   wsError: string | null;
 
@@ -97,6 +102,8 @@ interface TradingState {
   // WebSocket actions
   initWebSocket: (url?: string) => void;
   closeWebSocket: () => void;
+  initHyperliquid: () => void;
+  closeHyperliquid: () => void;
 
   // Real-time data actions
   setTicker: (ticker: Ticker) => void;
@@ -143,6 +150,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   quantity: '',
   leverage: '10',
   wsClient: null,
+  hlWsClient: null,
   wsConnected: false,
   wsError: null,
   isConnected: false,
@@ -198,6 +206,181 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     if (wsClient) {
       wsClient.disconnect();
       set({ wsClient: null, wsConnected: false });
+    }
+  },
+
+  // Hyperliquid WebSocket initialization
+  initHyperliquid: () => {
+    const { hlWsClient, currentMarket } = get();
+
+    // Close existing connection
+    if (hlWsClient) {
+      hlWsClient.disconnect();
+    }
+
+    // Create new client
+    const client = getHyperliquidWSClient();
+
+    // Set up callbacks
+    client.onConnect(() => {
+      set({ wsConnected: true, wsError: null });
+
+      // Subscribe to market data
+      client.subscribeTicker(currentMarket, (ticker: NormalizedTicker) => {
+        set({
+          ticker: {
+            marketId: ticker.marketId,
+            markPrice: ticker.markPrice,
+            indexPrice: ticker.indexPrice,
+            lastPrice: ticker.lastPrice,
+            high24h: ticker.high24h,
+            low24h: ticker.low24h,
+            volume24h: ticker.volume24h,
+            change24h: ticker.change24h,
+            fundingRate: ticker.fundingRate,
+            nextFunding: 0,
+            timestamp: Date.now(),
+          },
+          priceInfo: {
+            marketId: ticker.marketId,
+            markPrice: ticker.markPrice,
+            indexPrice: ticker.indexPrice,
+            lastPrice: ticker.lastPrice,
+            change24h: ticker.change24h,
+            high24h: ticker.high24h,
+            low24h: ticker.low24h,
+            volume24h: ticker.volume24h,
+          },
+        });
+      });
+
+      client.subscribeOrderbook(currentMarket, (orderbook: NormalizedOrderbook) => {
+        const bids = orderbook.bids;
+        const asks = orderbook.asks;
+        const bestBid = bids[0]?.price || '0';
+        const bestAsk = asks[0]?.price || '0';
+        const spread = new BigNumber(bestAsk).minus(bestBid).toString();
+
+        set({
+          orderBook: {
+            bids,
+            asks,
+            bestBid,
+            bestAsk,
+            spread,
+          },
+        });
+      });
+
+      client.subscribeTrades(currentMarket, (trade: NormalizedTrade) => {
+        set((state) => ({
+          recentTrades: [
+            {
+              tradeId: trade.id,
+              marketId: trade.marketId,
+              price: trade.price,
+              quantity: trade.quantity,
+              side: trade.side,
+              timestamp: trade.timestamp,
+            },
+            ...state.recentTrades.slice(0, 99),
+          ],
+        }));
+      });
+    });
+
+    client.onDisconnect(() => {
+      set({ wsConnected: false });
+    });
+
+    client.onError(() => {
+      set({ wsError: 'Hyperliquid WebSocket connection error' });
+    });
+
+    // Connect
+    client.connect();
+
+    // Also fetch initial data via REST API
+    const fetchInitialData = async () => {
+      try {
+        const hlClient = getHyperliquidClient();
+
+        // Fetch ticker
+        const ticker = await hlClient.getTicker(currentMarket);
+        if (ticker) {
+          set({
+            ticker: {
+              marketId: ticker.marketId,
+              markPrice: ticker.markPrice,
+              indexPrice: ticker.indexPrice,
+              lastPrice: ticker.lastPrice,
+              high24h: ticker.high24h,
+              low24h: ticker.low24h,
+              volume24h: ticker.volume24h,
+              change24h: ticker.change24h,
+              fundingRate: ticker.fundingRate,
+              nextFunding: 0,
+              timestamp: Date.now(),
+            },
+            priceInfo: {
+              marketId: ticker.marketId,
+              markPrice: ticker.markPrice,
+              indexPrice: ticker.indexPrice,
+              lastPrice: ticker.lastPrice,
+              change24h: ticker.change24h,
+              high24h: ticker.high24h,
+              low24h: ticker.low24h,
+              volume24h: ticker.volume24h,
+            },
+          });
+        }
+
+        // Fetch orderbook
+        const orderbook = await hlClient.getOrderbook(currentMarket);
+        if (orderbook) {
+          const bestBid = orderbook.bids[0]?.price || '0';
+          const bestAsk = orderbook.asks[0]?.price || '0';
+          const spread = new BigNumber(bestAsk).minus(bestBid).toString();
+
+          set({
+            orderBook: {
+              bids: orderbook.bids,
+              asks: orderbook.asks,
+              bestBid,
+              bestAsk,
+              spread,
+            },
+          });
+        }
+
+        // Fetch recent trades
+        const trades = await hlClient.getRecentTrades(currentMarket);
+        if (trades.length > 0) {
+          set({
+            recentTrades: trades.map((trade) => ({
+              tradeId: trade.id,
+              marketId: trade.marketId,
+              price: trade.price,
+              quantity: trade.quantity,
+              side: trade.side,
+              timestamp: trade.timestamp,
+            })),
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch initial Hyperliquid data:', error);
+      }
+    };
+
+    fetchInitialData();
+    set({ hlWsClient: client });
+  },
+
+  closeHyperliquid: () => {
+    const { hlWsClient } = get();
+    if (hlWsClient) {
+      hlWsClient.disconnect();
+      set({ hlWsClient: null, wsConnected: false });
     }
   },
 

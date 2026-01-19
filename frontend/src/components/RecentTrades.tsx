@@ -1,10 +1,13 @@
 /**
  * Recent Trades Component
  * Displays real-time trade stream with animations
+ * Uses Hyperliquid API when enabled, otherwise uses mock data
  */
 
 import { useEffect, useState, useRef } from 'react';
 import { useTradingStore } from '@/stores/tradingStore';
+import { config } from '@/lib/config';
+import { getHyperliquidClient } from '@/lib/api/hyperliquid';
 
 interface Trade {
   id: string;
@@ -19,7 +22,7 @@ interface RecentTradesProps {
   maxTrades?: number;
 }
 
-// Generate mock trades for development
+// Generate mock trades for development (fallback)
 const generateMockTrade = (basePrice: number): Trade => {
   const side = Math.random() > 0.5 ? 'buy' : 'sell';
   const priceChange = (Math.random() - 0.5) * 20;
@@ -38,45 +41,113 @@ const generateMockTrade = (basePrice: number): Trade => {
 export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTradesProps) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [newTradeId, setNewTradeId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { ticker, wsConnected } = useTradingStore();
+  const { ticker, wsConnected, recentTrades } = useTradingStore();
 
-  // Initialize with mock trades
+  const useHyperliquid = config.features.useHyperliquid && !config.features.mockMode;
+
+  // Load initial trades from Hyperliquid API
   useEffect(() => {
-    const basePrice = parseFloat(ticker?.lastPrice || '50000');
-    const initialTrades: Trade[] = [];
+    if (useHyperliquid) {
+      const loadTrades = async () => {
+        setIsLoading(true);
+        try {
+          const hlClient = getHyperliquidClient();
+          const hlTrades = await hlClient.getRecentTrades(marketId, maxTrades);
 
-    for (let i = 0; i < 20; i++) {
-      const trade = generateMockTrade(basePrice);
-      trade.timestamp = Date.now() - i * 1000;
-      trade.id = `init-${i}`;
-      initialTrades.push(trade);
+          setTrades(
+            hlTrades.map((trade) => ({
+              id: trade.id,
+              price: trade.price,
+              quantity: trade.quantity,
+              side: trade.side,
+              timestamp: trade.timestamp,
+            }))
+          );
+        } catch (error) {
+          console.error('Failed to load trades:', error);
+          // Fall back to mock data
+          const basePrice = parseFloat(ticker?.lastPrice || '50000');
+          const initialTrades: Trade[] = [];
+          for (let i = 0; i < 20; i++) {
+            const trade = generateMockTrade(basePrice);
+            trade.timestamp = Date.now() - i * 1000;
+            trade.id = `init-${i}`;
+            initialTrades.push(trade);
+          }
+          setTrades(initialTrades);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadTrades();
+    } else {
+      // Mock mode - generate initial trades
+      setIsLoading(false);
+      const basePrice = parseFloat(ticker?.lastPrice || '50000');
+      const initialTrades: Trade[] = [];
+
+      for (let i = 0; i < 20; i++) {
+        const trade = generateMockTrade(basePrice);
+        trade.timestamp = Date.now() - i * 1000;
+        trade.id = `init-${i}`;
+        initialTrades.push(trade);
+      }
+
+      setTrades(initialTrades);
     }
+  }, [marketId, useHyperliquid]);
 
-    setTrades(initialTrades);
-  }, []);
-
-  // Simulate real-time trades
+  // Handle real-time trade updates from store
   useEffect(() => {
-    const basePrice = parseFloat(ticker?.lastPrice || '50000');
+    if (useHyperliquid && recentTrades.length > 0) {
+      const storeTrades: Trade[] = recentTrades.map((trade) => ({
+        id: trade.tradeId,
+        price: trade.price,
+        quantity: trade.quantity,
+        side: trade.side,
+        timestamp: trade.timestamp,
+      }));
 
-    const interval = setInterval(() => {
-      const newTrade = generateMockTrade(basePrice);
-      setNewTradeId(newTrade.id);
+      // Check for new trade
+      if (storeTrades[0]?.id !== trades[0]?.id) {
+        setNewTradeId(storeTrades[0]?.id || null);
 
-      setTrades((prev) => {
-        const updated = [newTrade, ...prev];
-        return updated.slice(0, maxTrades);
-      });
+        // Clear animation highlight after 500ms
+        setTimeout(() => {
+          setNewTradeId(null);
+        }, 500);
+      }
 
-      // Clear animation highlight after 500ms
-      setTimeout(() => {
-        setNewTradeId(null);
-      }, 500);
-    }, 1500 + Math.random() * 1000); // Random interval 1.5-2.5s
+      setTrades(storeTrades.slice(0, maxTrades));
+    }
+  }, [recentTrades, useHyperliquid, maxTrades]);
 
-    return () => clearInterval(interval);
-  }, [ticker?.lastPrice, maxTrades]);
+  // Mock mode - simulate real-time trades
+  useEffect(() => {
+    if (!useHyperliquid || config.features.mockMode) {
+      const basePrice = parseFloat(ticker?.lastPrice || '50000');
+
+      const interval = setInterval(() => {
+        const newTrade = generateMockTrade(basePrice);
+        setNewTradeId(newTrade.id);
+
+        setTrades((prev) => {
+          const updated = [newTrade, ...prev];
+          return updated.slice(0, maxTrades);
+        });
+
+        // Clear animation highlight after 500ms
+        setTimeout(() => {
+          setNewTradeId(null);
+        }, 500);
+      }, 1500 + Math.random() * 1000); // Random interval 1.5-2.5s
+
+      return () => clearInterval(interval);
+    }
+  }, [ticker?.lastPrice, maxTrades, useHyperliquid]);
 
   // Format time
   const formatTime = (timestamp: number): string => {
@@ -109,6 +180,9 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
               <span>Live</span>
             </span>
           )}
+          {useHyperliquid && (
+            <span className="text-xs text-dark-500 bg-dark-800 px-1.5 py-0.5 rounded">HL</span>
+          )}
         </div>
         <span className="text-xs text-dark-400">{marketId}</span>
       </div>
@@ -120,41 +194,70 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
         <span className="text-right">Time</span>
       </div>
 
-      {/* Trades List */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="divide-y divide-dark-800">
-          {trades.map((trade) => (
-            <div
-              key={trade.id}
-              className={`grid grid-cols-3 px-4 py-1.5 text-xs transition-colors duration-300 ${
-                newTradeId === trade.id
-                  ? trade.side === 'buy'
-                    ? 'bg-primary-500/20'
-                    : 'bg-danger-500/20'
-                  : 'hover:bg-dark-800'
-              }`}
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex items-center space-x-2">
+            <svg
+              className="animate-spin h-4 w-4 text-primary-400"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
             >
-              <span
-                className={`font-mono ${
-                  trade.side === 'buy' ? 'text-primary-400' : 'text-danger-400'
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            <span className="text-xs text-dark-400">Loading trades...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Trades List */}
+      {!isLoading && (
+        <div ref={containerRef} className="flex-1 overflow-y-auto scrollbar-thin">
+          <div className="divide-y divide-dark-800">
+            {trades.map((trade) => (
+              <div
+                key={trade.id}
+                className={`grid grid-cols-3 px-4 py-1.5 text-xs transition-colors duration-300 ${
+                  newTradeId === trade.id
+                    ? trade.side === 'buy'
+                      ? 'bg-primary-500/20'
+                      : 'bg-danger-500/20'
+                    : 'hover:bg-dark-800'
                 }`}
               >
-                {formatPrice(trade.price)}
-              </span>
-              <span className="text-right text-white font-mono">{trade.quantity}</span>
-              <span className="text-right text-dark-400">{formatTime(trade.timestamp)}</span>
-            </div>
-          ))}
+                <span
+                  className={`font-mono ${
+                    trade.side === 'buy' ? 'text-primary-400' : 'text-danger-400'
+                  }`}
+                >
+                  {formatPrice(trade.price)}
+                </span>
+                <span className="text-right text-white font-mono">{trade.quantity}</span>
+                <span className="text-right text-dark-400">{formatTime(trade.timestamp)}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Footer Stats */}
       <div className="px-4 py-2 border-t border-dark-700 text-xs text-dark-400">
         <div className="flex items-center justify-between">
           <span>Trades: {trades.length}</span>
-          <span>
-            Last: {trades[0] ? formatTime(trades[0].timestamp) : '--:--:--'}
-          </span>
+          <span>Last: {trades[0] ? formatTime(trades[0].timestamp) : '--:--:--'}</span>
         </div>
       </div>
     </div>
