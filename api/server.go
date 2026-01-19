@@ -186,6 +186,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
+// GetOrderHandler returns the order handler for testing
+func (s *Server) GetOrderHandler() *handlers.OrderHandler {
+	return s.orderHandler
+}
+
 // handleHealth handles health check requests
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
