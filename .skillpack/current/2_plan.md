@@ -1,186 +1,315 @@
-# Phase 2: 详细实施规划 (更新)
+# Phase 2: REST API 区块链集成 - 详细实施计划
 
-## 目标: 订单提交流程完善
-
-> 前置已完成: REST API, WebSocket, 前端配置
-> 本轮目标: **用户能够连接钱包并提交订单**
+## 目标: 实现 REST API 与区块链的完整集成
 
 ---
 
-## 子任务清单
+## 1. Server 结构改造
 
-### 子任务 1: WalletButton 组件 ⏱️ ~30分钟
+### 1.1 抽象数据访问层
 
-**创建文件**:
-```
-frontend/src/components/WalletButton.tsx
+在 `api/` 下新增 `Service` 接口：
+
+```go
+// api/service.go
+type OrderService interface {
+    PlaceOrder(ctx context.Context, req *PlaceOrderRequest) (*PlaceOrderResponse, error)
+    CancelOrder(ctx context.Context, trader, orderID string) (*CancelOrderResponse, error)
+    GetOrder(ctx context.Context, orderID string) (*Order, error)
+    GetOrders(ctx context.Context, trader, marketID string, limit int) ([]*Order, error)
+}
+
+type PositionService interface {
+    GetPositions(ctx context.Context, trader string) ([]*Position, error)
+    ClosePosition(ctx context.Context, req *ClosePositionRequest) (*ClosePositionResponse, error)
+}
+
+type AccountService interface {
+    GetAccount(ctx context.Context, trader string) (*Account, error)
+    Deposit(ctx context.Context, trader string, amount string) (*Account, error)
+    Withdraw(ctx context.Context, trader string, amount string) (*Account, error)
+}
 ```
 
-**功能**:
-- 显示连接/断开按钮
-- 显示缩短的钱包地址
-- 显示连接状态指示器
-- 集成到页面顶部
+### 1.2 Server 结构扩展
 
-**UI 设计**:
+```go
+type Server struct {
+    httpServer      *http.Server
+    wsServer        *websocket.Server
+    config          *Config
+    mockMode        bool
+
+    // 新增服务层
+    orderService    OrderService
+    positionService PositionService
+    accountService  AccountService
+    rateLimiter     *middleware.RateLimiter
+}
 ```
-┌─────────────────────────────┐
-│ 未连接:  [Connect Wallet]   │
-├─────────────────────────────┤
-│ 已连接:  🟢 perp1...xyz [▼] │
-│          └─ Disconnect      │
-└─────────────────────────────┘
-```
+
+### 1.3 Mock 模式切换
+
+- `config.MockMode=true` 或 keeper 为空时走 mock
+- 否则走 keeper
+- 仅在 mock 模式启动 `startMockDataBroadcaster`
 
 ---
 
-### 子任务 2: Mock 钱包模式 ⏱️ ~45分钟
+## 2. 新增端点实现
 
-**创建文件**:
+### 2.1 订单端点
+
+#### POST /v1/orders - 提交订单
+
+**请求:**
+```json
+{
+  "market_id": "BTC-USDC",
+  "side": "buy",
+  "type": "limit",
+  "price": "96000.00",
+  "quantity": "0.05",
+  "trader": "cosmos1..."
+}
 ```
-frontend/src/lib/wallet/mock.ts
-```
 
-**修改文件**:
-- `frontend/src/hooks/useWallet.ts` - 添加 mock 模式判断
-
-**功能**:
-- 检测 `NEXT_PUBLIC_MOCK_MODE=true`
-- Mock 模式下不连接真实 Keplr
-- 模拟钱包地址和签名
-- 模拟交易广播 (返回假 TxHash)
-
-**Mock 钱包接口**:
-```typescript
-class MockWallet implements IWallet {
-  async connect(): Promise<WalletAccount> {
-    return {
-      address: 'perpdex1mock...demo',
-      pubKey: new Uint8Array(32),
-      algo: 'secp256k1',
-      name: 'Demo Account',
-    };
+**响应:**
+```json
+{
+  "order": {
+    "order_id": "order-12",
+    "trader": "cosmos1...",
+    "market_id": "BTC-USDC",
+    "side": "buy",
+    "type": "limit",
+    "price": "96000.00",
+    "quantity": "0.05",
+    "filled_qty": "0.00",
+    "status": "open",
+    "created_at": 1710000000000,
+    "updated_at": 1710000000000
+  },
+  "match": {
+    "filled_qty": "0.00",
+    "avg_price": "0.00",
+    "remaining_qty": "0.05",
+    "trades": []
   }
+}
+```
 
-  async signAndBroadcast(messages, memo): Promise<BroadcastResult> {
-    // 模拟 2 秒延迟
-    await sleep(2000);
-    return {
-      code: 0,
-      transactionHash: generateMockTxHash(),
-      rawLog: 'Mock transaction succeeded',
-    };
+#### DELETE /v1/orders/{id} - 取消订单
+
+**响应:**
+```json
+{
+  "order": {
+    "order_id": "order-12",
+    "status": "cancelled",
+    "updated_at": 1710000100000
+  },
+  "cancelled": true
+}
+```
+
+#### PUT /v1/orders/{id} - 修改订单 (cancel+replace)
+
+**请求:**
+```json
+{
+  "price": "96500.00",
+  "quantity": "0.03"
+}
+```
+
+**响应:**
+```json
+{
+  "old_order_id": "order-12",
+  "order": {
+    "order_id": "order-13",
+    "status": "open"
+  },
+  "match": {
+    "filled_qty": "0.00",
+    "remaining_qty": "0.03",
+    "trades": []
+  }
+}
+```
+
+#### GET /v1/orders - 查询订单列表
+
+**Query:** `trader`, `market_id`, `status`, `limit`, `cursor`
+
+**响应:**
+```json
+{
+  "orders": [...],
+  "next_cursor": "order-13",
+  "total": 1
+}
+```
+
+### 2.2 仓位端点
+
+#### POST /v1/positions/close - 平仓
+
+**请求:**
+```json
+{
+  "market_id": "BTC-USDC",
+  "size": "0.05",
+  "price": "97500.00"
+}
+```
+
+**响应:**
+```json
+{
+  "market_id": "BTC-USDC",
+  "closed_size": "0.05",
+  "close_price": "97500.00",
+  "realized_pnl": "12.50",
+  "account": {
+    "trader": "cosmos1...",
+    "balance": "9012.50",
+    "available_balance": "9012.50"
+  }
+}
+```
+
+### 2.3 账户端点
+
+#### POST /v1/account/deposit - 入金
+
+**请求:**
+```json
+{
+  "amount": "1000.00"
+}
+```
+
+**响应:**
+```json
+{
+  "account": {
+    "trader": "cosmos1...",
+    "balance": "1000.00",
+    "available_balance": "1000.00"
+  }
+}
+```
+
+#### POST /v1/account/withdraw - 出金
+
+**请求:**
+```json
+{
+  "amount": "250.00"
+}
+```
+
+**响应:**
+```json
+{
+  "account": {
+    "trader": "cosmos1...",
+    "balance": "750.00",
+    "available_balance": "750.00"
   }
 }
 ```
 
 ---
 
-### 子任务 3: Toast 通知系统 ⏱️ ~30分钟
+## 3. 速率限制集成
 
-**创建文件**:
+### 3.1 中间件链
+
+```go
+// 1. CORS (最外层，处理 OPTIONS)
+// 2. RateLimitMiddleware (IP/用户级限速)
+// 3. OrderRateLimitMiddleware (仅对订单端点)
+// 4. 实际处理器
+
+mux := http.NewServeMux()
+// ... 注册路由 ...
+
+// 应用中间件
+handler := corsMiddleware(
+    middleware.RateLimitMiddleware(s.rateLimiter)(mux),
+)
 ```
-frontend/src/components/Toast.tsx
-frontend/src/contexts/ToastContext.tsx
+
+### 3.2 订单特殊限速
+
+对 POST/PUT/DELETE /v1/orders 叠加 `OrderRateLimitMiddleware`
+
+---
+
+## 4. 文件清单
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `api/service.go` | 新建 | 服务接口定义 |
+| `api/service_keeper.go` | 新建 | Keeper 实现 |
+| `api/service_mock.go` | 新建 | Mock 实现 |
+| `api/server.go` | 修改 | 添加新端点，启用限速 |
+| `api/handlers/orders.go` | 新建 | 订单处理器 |
+| `api/handlers/positions.go` | 新建 | 仓位处理器 |
+| `api/handlers/account.go` | 新建 | 账户处理器 |
+
+---
+
+## 5. 执行顺序
+
 ```
-
-**功能**:
-- 全局 Toast 提供者
-- 支持 success/error/info/warning 类型
-- 自动消失 (5秒)
-- 可手动关闭
-- 支持多个 Toast 堆叠
-
-**API 设计**:
-```typescript
-const { showToast } = useToast();
-
-// 使用
-showToast({
-  type: 'success',
-  title: '订单已提交',
-  message: 'TxHash: 0x1234...5678',
-});
+[1] 创建服务接口 (api/service.go)
+     │
+[2] 实现 Mock 服务 (api/service_mock.go)
+     │
+[3] 实现订单端点 (api/handlers/orders.go)
+     │
+[4] 实现仓位端点 (api/handlers/positions.go)
+     │
+[5] 实现账户端点 (api/handlers/account.go)
+     │
+[6] 修改 server.go - 注册路由 + 启用限速
+     │
+[7] 测试验证
 ```
 
 ---
 
-### 子任务 4: 链配置同步 ⏱️ ~15分钟
-
-**验证文件**:
-- `frontend/.env.local`
-- `frontend/src/lib/wallet/keplr.ts` (PERPDEX_CHAIN_CONFIG)
-- `frontend/src/lib/config.ts`
-
-**确保一致**:
-```
-chainId: perpdex-local-1
-rpcUrl: http://localhost:26657
-restUrl: http://localhost:1317
-wsUrl: ws://localhost:8080/ws
-```
-
----
-
-### 子任务 5: 错误处理增强 ⏱️ ~30分钟
-
-**修改文件**:
-- `frontend/src/hooks/useWallet.ts`
-- `frontend/src/components/TradeForm.tsx`
-
-**错误分类**:
-| 错误类型 | 用户提示 |
-|----------|----------|
-| 未安装 Keplr | "请安装 Keplr 钱包扩展" |
-| 用户拒绝连接 | "已取消钱包连接" |
-| 签名被拒绝 | "交易已取消" |
-| 网络错误 | "网络连接失败，请重试" |
-| RPC 超时 | "交易超时，请检查网络" |
-| 余额不足 | "保证金不足" |
-
----
-
-## 执行顺序
-
-```
-[1] 子任务 3: Toast 通知 (其他组件依赖)
-     │
-     ▼
-[2] 子任务 2: Mock 钱包模式
-     │
-     ▼
-[3] 子任务 1: WalletButton 组件
-     │
-     ▼
-[4] 子任务 4: 链配置同步
-     │
-     ▼
-[5] 子任务 5: 错误处理增强
-     │
-     ▼
-[✓] 订单提交流程完成
-```
-
----
-
-## 预计时间
+## 6. 预计时间
 
 | 子任务 | 时间 |
 |--------|------|
-| Toast 通知系统 | 30 分钟 |
-| Mock 钱包模式 | 45 分钟 |
-| WalletButton 组件 | 30 分钟 |
-| 链配置同步 | 15 分钟 |
-| 错误处理增强 | 30 分钟 |
+| 服务接口定义 | 15 min |
+| Mock 服务实现 | 20 min |
+| 订单端点 | 30 min |
+| 仓位端点 | 20 min |
+| 账户端点 | 20 min |
+| Server 改造 + 限速 | 15 min |
+| 测试验证 | 20 min |
 | **总计** | **~2.5 小时** |
 
 ---
 
-## 验收标准
+## 7. 验收标准
 
-1. ✅ 页面顶部显示 "Connect Wallet" 按钮
-2. ✅ Mock 模式下点击连接，显示模拟地址
-3. ✅ 填写订单后点击提交，显示确认弹窗
-4. ✅ 确认后显示签名中状态
-5. ✅ 交易完成后显示 Toast 通知
-6. ✅ 错误情况显示友好提示
+- [ ] POST /v1/orders 能提交订单（mock 模式返回模拟数据）
+- [ ] DELETE /v1/orders/{id} 能取消订单
+- [ ] PUT /v1/orders/{id} 能修改订单
+- [ ] GET /v1/orders 能查询订单列表
+- [ ] POST /v1/positions/close 能平仓
+- [ ] POST /v1/account/deposit 能入金
+- [ ] POST /v1/account/withdraw 能出金
+- [ ] 速率限制生效，返回 429 和 Retry-After 头
+- [ ] 所有错误返回统一 JSON 格式
+
+---
+
+**准备进入 Phase 3: 执行实现**

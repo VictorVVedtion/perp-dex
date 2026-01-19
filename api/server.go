@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/openalpha/perp-dex/api/handlers"
+	"github.com/openalpha/perp-dex/api/middleware"
+	"github.com/openalpha/perp-dex/api/types"
 	"github.com/openalpha/perp-dex/api/websocket"
 )
 
@@ -17,6 +20,19 @@ type Server struct {
 	wsServer   *websocket.Server
 	config     *Config
 	mockMode   bool
+
+	// Services
+	orderService    types.OrderService
+	positionService types.PositionService
+	accountService  types.AccountService
+
+	// Handlers
+	orderHandler    *handlers.OrderHandler
+	positionHandler *handlers.PositionHandler
+	accountHandler  *handlers.AccountHandler
+
+	// Rate limiter
+	rateLimiter *middleware.RateLimiter
 }
 
 // Config contains server configuration
@@ -48,11 +64,58 @@ func NewServer(config *Config) *Server {
 	wsConfig := websocket.DefaultServerConfig()
 	wsConfig.Port = config.Port
 
-	return &Server{
-		config:   config,
-		wsServer: websocket.NewServer(wsConfig),
-		mockMode: config.MockMode,
+	// Create mock service (default for now)
+	mockService := NewMockService()
+
+	// Create rate limiter
+	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
+
+	s := &Server{
+		config:          config,
+		wsServer:        websocket.NewServer(wsConfig),
+		mockMode:        config.MockMode,
+		orderService:    mockService,
+		positionService: mockService,
+		accountService:  mockService,
+		rateLimiter:     rateLimiter,
 	}
+
+	// Create handlers
+	s.orderHandler = handlers.NewOrderHandler(s.orderService)
+	s.positionHandler = handlers.NewPositionHandler(s.positionService)
+	s.accountHandler = handlers.NewAccountHandler(s.accountService)
+
+	return s
+}
+
+// NewServerWithServices creates a new API server with custom services
+func NewServerWithServices(config *Config, orderSvc types.OrderService, positionSvc types.PositionService, accountSvc types.AccountService) *Server {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	wsConfig := websocket.DefaultServerConfig()
+	wsConfig.Port = config.Port
+
+	// Create rate limiter
+	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
+
+	s := &Server{
+		config:          config,
+		wsServer:        websocket.NewServer(wsConfig),
+		mockMode:        config.MockMode,
+		orderService:    orderSvc,
+		positionService: positionSvc,
+		accountService:  accountSvc,
+		rateLimiter:     rateLimiter,
+	}
+
+	// Create handlers
+	s.orderHandler = handlers.NewOrderHandler(s.orderService)
+	s.positionHandler = handlers.NewPositionHandler(s.positionService)
+	s.accountHandler = handlers.NewAccountHandler(s.accountService)
+
+	return s
 }
 
 // Start starts the API server
@@ -62,21 +125,39 @@ func (s *Server) Start() error {
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
 
-	// Market endpoints
+	// Market endpoints (read-only)
 	mux.HandleFunc("/v1/markets", s.handleMarkets)
 	mux.HandleFunc("/v1/markets/", s.handleMarket)
 
-	// Account endpoints
-	mux.HandleFunc("/v1/accounts/", s.handleAccount)
+	// Account endpoints (legacy read-only)
+	mux.HandleFunc("/v1/accounts/", s.handleAccountLegacy)
 
 	// Tickers
 	mux.HandleFunc("/v1/tickers", s.handleTickers)
 
+	// === NEW ENDPOINTS ===
+
+	// Order endpoints (POST, GET, PUT, DELETE)
+	mux.HandleFunc("/v1/orders", s.orderHandler.HandleOrders)
+	mux.HandleFunc("/v1/orders/", s.orderHandler.HandleOrder)
+
+	// Position endpoints (GET, POST close)
+	mux.HandleFunc("/v1/positions", s.positionHandler.HandlePositions)
+	mux.HandleFunc("/v1/positions/close", s.positionHandler.HandleClosePosition)
+	mux.HandleFunc("/v1/positions/", s.positionHandler.HandlePosition)
+
+	// Account endpoints (GET, POST deposit/withdraw)
+	mux.HandleFunc("/v1/account", s.accountHandler.HandleAccount)
+	mux.HandleFunc("/v1/account/deposit", s.accountHandler.HandleDeposit)
+	mux.HandleFunc("/v1/account/withdraw", s.accountHandler.HandleWithdraw)
+
 	// WebSocket
 	mux.HandleFunc("/ws", s.wsServer.GetHub().ServeWS)
 
-	// CORS middleware
-	handler := corsMiddleware(mux)
+	// Apply middleware chain: CORS -> RateLimit -> Handler
+	handler := corsMiddleware(
+		middleware.RateLimitMiddleware(s.rateLimiter)(mux),
+	)
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	s.httpServer = &http.Server{
@@ -95,6 +176,8 @@ func (s *Server) Start() error {
 	}
 
 	log.Printf("API server starting on %s (mock mode: %v)", addr, s.mockMode)
+	log.Printf("New endpoints enabled: /v1/orders, /v1/positions, /v1/account")
+	log.Printf("Rate limiting enabled: %d req/s per IP", 100)
 	return s.httpServer.ListenAndServe()
 }
 
@@ -199,8 +282,8 @@ func (s *Server) handleMarket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAccount handles /v1/accounts/{addr}/* endpoints
-func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
+// handleAccountLegacy handles /v1/accounts/{addr}/* endpoints (legacy read-only)
+func (s *Server) handleAccountLegacy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -282,7 +365,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Trader-Address")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
