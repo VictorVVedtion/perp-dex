@@ -1,0 +1,36 @@
+{
+  "errors": {},
+  "latency": {
+    "avg_ms": 0.08591725768321512,
+    "max_ms": 1.516,
+    "min_ms": 0.036,
+    "p50_ms": 0.08,
+    "p90_ms": 0.113,
+    "p95_ms": 0.133,
+    "p99_ms": 0.215
+  },
+  "status_codes": {
+    "201": 291,
+    "429": 69081
+  },
+  "summary": {
+    "failed_requests": 69081,
+    "requests_per_second": 2010.3012556368071,
+    "success_rate": "0.42%",
+    "success_requests": 291,
+    "test_duration": "34.508260792s",
+    "total_requests": 69372
+  },
+  "test_config": {
+    "base_url": "http://localhost:8080",
+    "concurrency": 10,
+    "duration": "30s",
+    "markets": [
+      "BTC-USDC",
+      "ETH-USDC",
+      "SOL-USDC"
+    ],
+    "trader_count": 100
+  },
+  "timestamp": "2026-01-19T12:37:54-08:00"
+}
