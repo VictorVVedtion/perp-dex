@@ -257,7 +257,10 @@ func (k *Keeper) PlaceOrder(ctx context.Context, trader, marketID string, side t
 	// Create order
 	order := types.NewOrder(orderID, trader, marketID, side, orderType, price, quantity)
 
-	// TODO: Check margin requirement via perpetualKeeper
+	// Check margin requirement via perpetualKeeper (REAL margin validation)
+	if err := k.perpetualKeeper.CheckMarginRequirement(sdkCtx, trader, marketID, side, quantity, price); err != nil {
+		return nil, nil, fmt.Errorf("insufficient margin: %w", err)
+	}
 
 	// Process order through matching engine
 	engine := NewMatchingEngine(k)

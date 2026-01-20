@@ -22,21 +22,7 @@ interface RecentTradesProps {
   maxTrades?: number;
 }
 
-// Generate mock trades for development (fallback)
-const generateMockTrade = (basePrice: number): Trade => {
-  const side = Math.random() > 0.5 ? 'buy' : 'sell';
-  const priceChange = (Math.random() - 0.5) * 20;
-  const price = basePrice + priceChange;
-  const quantity = (Math.random() * 0.5 + 0.01).toFixed(4);
-
-  return {
-    id: `trade-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    price: price.toFixed(2),
-    quantity,
-    side,
-    timestamp: Date.now(),
-  };
-};
+// Note: Mock trade generation removed - using real Hyperliquid API only
 
 export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTradesProps) {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -66,17 +52,9 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
             }))
           );
         } catch (error) {
-          console.error('Failed to load trades:', error);
-          // Fall back to mock data
-          const basePrice = parseFloat(ticker?.lastPrice || '50000');
-          const initialTrades: Trade[] = [];
-          for (let i = 0; i < 20; i++) {
-            const trade = generateMockTrade(basePrice);
-            trade.timestamp = Date.now() - i * 1000;
-            trade.id = `init-${i}`;
-            initialTrades.push(trade);
-          }
-          setTrades(initialTrades);
+          console.error('Failed to load trades from Hyperliquid:', error);
+          // Keep trades empty on error - no mock fallback
+          setTrades([]);
         } finally {
           setIsLoading(false);
         }
@@ -84,19 +62,10 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
 
       loadTrades();
     } else {
-      // Mock mode - generate initial trades
+      // Mock mode disabled - show empty state
       setIsLoading(false);
-      const basePrice = parseFloat(ticker?.lastPrice || '50000');
-      const initialTrades: Trade[] = [];
-
-      for (let i = 0; i < 20; i++) {
-        const trade = generateMockTrade(basePrice);
-        trade.timestamp = Date.now() - i * 1000;
-        trade.id = `init-${i}`;
-        initialTrades.push(trade);
-      }
-
-      setTrades(initialTrades);
+      setTrades([]);
+      console.warn('RecentTrades: Mock mode is disabled, but Hyperliquid is not enabled');
     }
   }, [marketId, useHyperliquid]);
 
@@ -125,29 +94,7 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
     }
   }, [recentTrades, useHyperliquid, maxTrades]);
 
-  // Mock mode - simulate real-time trades
-  useEffect(() => {
-    if (!useHyperliquid || config.features.mockMode) {
-      const basePrice = parseFloat(ticker?.lastPrice || '50000');
-
-      const interval = setInterval(() => {
-        const newTrade = generateMockTrade(basePrice);
-        setNewTradeId(newTrade.id);
-
-        setTrades((prev) => {
-          const updated = [newTrade, ...prev];
-          return updated.slice(0, maxTrades);
-        });
-
-        // Clear animation highlight after 500ms
-        setTimeout(() => {
-          setNewTradeId(null);
-        }, 500);
-      }, 1500 + Math.random() * 1000); // Random interval 1.5-2.5s
-
-      return () => clearInterval(interval);
-    }
-  }, [ticker?.lastPrice, maxTrades, useHyperliquid]);
+  // Note: Mock mode trade simulation removed - only real data from Hyperliquid WebSocket
 
   // Format time
   const formatTime = (timestamp: number): string => {

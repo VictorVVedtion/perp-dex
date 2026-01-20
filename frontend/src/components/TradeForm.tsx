@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useTradingStore, mockAccount } from '@/stores/tradingStore';
+import { useTradingStore } from '@/stores/tradingStore';
 import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/contexts/ToastContext';
 import { OrderConfirmModal } from './OrderConfirmModal';
@@ -51,7 +51,9 @@ export function TradeForm() {
     activationPrice: '',
   });
 
-  const account = connected ? { balance: '10000.00' } : mockAccount;
+  // Use account from store or default for demo
+  const { account: storeAccount } = useTradingStore();
+  const account = storeAccount || { balance: connected ? '10000.00' : '0.00', trader: '', lockedMargin: '0', totalEquity: '0' };
   const marketId = 'BTC-USDC';
 
   // Calculate derived values

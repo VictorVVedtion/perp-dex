@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	clog "cosmossdk.io/log"
 	"github.com/openalpha/perp-dex/api/handlers"
 	"github.com/openalpha/perp-dex/api/middleware"
 	"github.com/openalpha/perp-dex/api/types"
@@ -116,6 +117,45 @@ func NewServerWithServices(config *Config, orderSvc types.OrderService, position
 	s.accountHandler = handlers.NewAccountHandler(s.accountService)
 
 	return s
+}
+
+// NewServerWithRealService creates an API server with real orderbook engine
+// This uses the actual MatchingEngineV2 for order processing
+func NewServerWithRealService(config *Config) (*Server, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+	config.MockMode = false
+
+	// Create real service with in-memory store
+	logger := clog.NewNopLogger()
+	realService, err := NewRealService(logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create real service: %w", err)
+	}
+
+	wsConfig := websocket.DefaultServerConfig()
+	wsConfig.Port = config.Port
+
+	// Create rate limiter
+	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
+
+	s := &Server{
+		config:          config,
+		wsServer:        websocket.NewServer(wsConfig),
+		mockMode:        false,
+		orderService:    realService,
+		positionService: realService,
+		accountService:  realService,
+		rateLimiter:     rateLimiter,
+	}
+
+	// Create handlers
+	s.orderHandler = handlers.NewOrderHandler(s.orderService)
+	s.positionHandler = handlers.NewPositionHandler(s.positionService)
+	s.accountHandler = handlers.NewAccountHandler(s.accountService)
+
+	return s, nil
 }
 
 // Start starts the API server

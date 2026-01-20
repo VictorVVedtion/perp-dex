@@ -1,0 +1,164 @@
+{
+  "version": "v0.1.0",
+  "generated_at": "2026-01-20T00:00:00Z",
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "go_version": "1.22",
+    "cpu": "Apple M-series",
+    "memory_gb": 16
+  },
+  "targets": {
+    "description": "Target performance metrics for PerpDEX MVP",
+    "block_time_ms": 500,
+    "orders_per_block": 1000,
+    "orders_per_second": 500,
+    "match_latency_ms": 100,
+    "api_p99_latency_ms": 100,
+    "success_rate_percent": 99.9
+  },
+  "benchmarks": {
+    "orderbook": {
+      "BenchmarkOrderBookV2_AddOrder": {
+        "ns_per_op": 850,
+        "bytes_per_op": 256,
+        "allocs_per_op": 4,
+        "threshold_percent": 20
+      },
+      "BenchmarkOrderBookV2_RemoveOrder": {
+        "ns_per_op": 450,
+        "bytes_per_op": 0,
+        "allocs_per_op": 0,
+        "threshold_percent": 20
+      },
+      "BenchmarkOrderBookV2_GetBestBid": {
+        "ns_per_op": 50,
+        "bytes_per_op": 0,
+        "allocs_per_op": 0,
+        "threshold_percent": 20
+      },
+      "BenchmarkOrderBookV2_1K_Orders": {
+        "ns_per_op": 1200,
+        "bytes_per_op": 512,
+        "allocs_per_op": 6,
+        "threshold_percent": 25
+      },
+      "BenchmarkOrderBookV2_10K_Orders": {
+        "ns_per_op": 1500,
+        "bytes_per_op": 512,
+        "allocs_per_op": 6,
+        "threshold_percent": 25
+      },
+      "BenchmarkOrderBookV2_100K_Orders": {
+        "ns_per_op": 2000,
+        "bytes_per_op": 512,
+        "allocs_per_op": 6,
+        "threshold_percent": 30
+      }
+    },
+    "matching_engine": {
+      "BenchmarkMatchingEngineV2_ProcessOrder": {
+        "ns_per_op": 5000,
+        "bytes_per_op": 1024,
+        "allocs_per_op": 12,
+        "threshold_percent": 20
+      },
+      "BenchmarkMatchingEngineV2_Match10K": {
+        "ns_per_op": 45000000,
+        "bytes_per_op": 10000000,
+        "allocs_per_op": 100000,
+        "threshold_percent": 25
+      },
+      "BenchmarkMatchingEngineV2_BatchProcess": {
+        "ns_per_op": 500000,
+        "bytes_per_op": 100000,
+        "allocs_per_op": 1000,
+        "threshold_percent": 25
+      },
+      "BenchmarkMatchingEngine_ConcurrentAccess": {
+        "ns_per_op": 10000,
+        "bytes_per_op": 2048,
+        "allocs_per_op": 20,
+        "threshold_percent": 30
+      }
+    },
+    "memory": {
+      "BenchmarkOrderBookV2_MemoryUsage": {
+        "bytes_per_op": 256,
+        "allocs_per_op": 4,
+        "threshold_percent": 20
+      }
+    },
+    "latency": {
+      "BenchmarkMatchingEngineV2_Latency": {
+        "ns_per_op_avg": 5000,
+        "ns_per_op_p50": 4000,
+        "ns_per_op_p99": 15000,
+        "threshold_percent": 25
+      }
+    }
+  },
+  "e2e_targets": {
+    "api_performance": {
+      "get_orderbook_p99_ms": 50,
+      "post_order_p99_ms": 100,
+      "get_positions_p99_ms": 50,
+      "websocket_connect_ms": 200,
+      "websocket_message_p99_ms": 50
+    },
+    "chain_performance": {
+      "tx_broadcast_p99_ms": 200,
+      "tx_confirmation_p99_ms": 1000,
+      "block_time_avg_ms": 500,
+      "block_time_max_ms": 2000
+    },
+    "throughput": {
+      "orders_per_second": 500,
+      "orders_per_block": 1000,
+      "concurrent_users": 100
+    },
+    "stability": {
+      "success_rate_percent": 99.9,
+      "max_memory_growth_mb": 100,
+      "max_latency_variance_percent": 50
+    }
+  },
+  "scenarios": {
+    "market_maker": {
+      "quotes_per_second": 10,
+      "spread_bps": 10,
+      "min_success_rate_percent": 95,
+      "max_p99_latency_ms": 500
+    },
+    "high_frequency_trader": {
+      "orders_per_second": 50,
+      "cancel_ratio_percent": 80,
+      "min_success_rate_percent": 90
+    },
+    "trading_rush": {
+      "num_traders": 100,
+      "orders_per_trader": 50,
+      "target_ops": 500,
+      "min_success_rate_percent": 95
+    },
+    "liquidation_cascade": {
+      "num_positions": 50,
+      "crash_percent": 20,
+      "max_processing_time_sec": 10
+    }
+  },
+  "regression_thresholds": {
+    "description": "Percentage degradation that triggers regression alert",
+    "throughput_drop_percent": 10,
+    "latency_increase_percent": 25,
+    "memory_increase_percent": 50,
+    "success_rate_drop_percent": 0.5
+  },
+  "ci_quick_targets": {
+    "description": "Relaxed targets for CI quick tests",
+    "benchmark_timeout_min": 5,
+    "e2e_timeout_min": 10,
+    "stability_duration_min": 5,
+    "min_success_rate_percent": 95
+  }
+}

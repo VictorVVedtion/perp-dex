@@ -33,35 +33,7 @@ interface KlineApiResponse {
   }[];
 }
 
-// Simulated K-line data for development (fallback)
-const generateMockKlines = (count: number = 200, basePrice: number = 50000): CandlestickData[] => {
-  const klines: CandlestickData[] = [];
-  let price = basePrice;
-  const now = Math.floor(Date.now() / 1000);
-  const interval = 60; // 1 minute
-
-  for (let i = count; i >= 0; i--) {
-    const time = (now - i * interval) as Time;
-    const volatility = 0.002; // 0.2%
-    const change = (Math.random() - 0.5) * 2 * volatility;
-    const open = price;
-    const close = price * (1 + change);
-    const high = Math.max(open, close) * (1 + Math.random() * volatility);
-    const low = Math.min(open, close) * (1 - Math.random() * volatility);
-
-    klines.push({
-      time,
-      open,
-      high,
-      low,
-      close,
-    });
-
-    price = close;
-  }
-
-  return klines;
-};
+// Note: Mock data generation removed - using real Hyperliquid API only
 
 // Fetch K-lines from Hyperliquid API or local API
 async function fetchKlines(
@@ -111,8 +83,8 @@ async function fetchKlines(
       close: k.close,
     }));
   } catch (error) {
-    console.warn('Failed to fetch klines from local API, using mock data:', error);
-    return generateMockKlines(limit);
+    console.error('Failed to fetch klines from both Hyperliquid and local API:', error);
+    throw new Error('Unable to load chart data');
   }
 }
 

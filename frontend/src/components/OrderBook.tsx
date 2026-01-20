@@ -1,8 +1,17 @@
 import { useMemo, useEffect, useState } from 'react'
 import BigNumber from 'bignumber.js'
-import { useTradingStore, PriceLevel, mockOrderBook } from '@/stores/tradingStore'
+import { useTradingStore, PriceLevel, OrderBookData } from '@/stores/tradingStore'
 import { config } from '@/lib/config'
 import { getHyperliquidClient } from '@/lib/api/hyperliquid'
+
+// Empty orderbook for initial state (not mock data)
+const emptyOrderBook: OrderBookData = {
+  bids: [],
+  asks: [],
+  bestBid: '0',
+  bestAsk: '0',
+  spread: '0',
+}
 
 interface OrderBookRowProps {
   price: string
@@ -52,7 +61,7 @@ interface OrderBookProps {
 export function OrderBook({ marketId = 'BTC-USDC' }: OrderBookProps) {
   const { orderBook, setPrice, wsConnected } = useTradingStore()
   const [isLoading, setIsLoading] = useState(true)
-  const [localOrderBook, setLocalOrderBook] = useState(mockOrderBook)
+  const [localOrderBook, setLocalOrderBook] = useState(emptyOrderBook)
 
   const useHyperliquid = config.features.useHyperliquid && !config.features.mockMode
 

@@ -4,7 +4,8 @@ import { PositionCard } from '@/components/PositionCard'
 import { Chart } from '@/components/Chart'
 import { RecentTrades } from '@/components/RecentTrades'
 import { TradeHistory } from '@/components/TradeHistory'
-import { useTradingStore, mockPriceInfo, mockPositions } from '@/stores/tradingStore'
+import { useTradingStore } from '@/stores/tradingStore'
+import { config } from '@/lib/config'
 import { useEffect, useState } from 'react'
 
 export default function TradePage() {
@@ -15,23 +16,29 @@ export default function TradePage() {
     wsConnected,
     initWebSocket,
     closeWebSocket,
+    initHyperliquid,
+    closeHyperliquid,
   } = useTradingStore()
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection based on config
   useEffect(() => {
-    initWebSocket()
+    const useHyperliquid = config.features.useHyperliquid && !config.features.mockMode
 
-    return () => {
-      closeWebSocket()
+    if (useHyperliquid) {
+      initHyperliquid()
+      return () => closeHyperliquid()
+    } else {
+      initWebSocket()
+      return () => closeWebSocket()
     }
-  }, [initWebSocket, closeWebSocket])
+  }, [initWebSocket, closeWebSocket, initHyperliquid, closeHyperliquid])
 
-  // Use real-time data or fallback to mock
-  const currentPrice = ticker?.lastPrice || priceInfo?.markPrice || '50000.00'
-  const change24h = ticker?.change24h || priceInfo?.change24h || '+2.5%'
-  const high24h = ticker?.high24h || priceInfo?.high24h || '51200.00'
-  const low24h = ticker?.low24h || priceInfo?.low24h || '48800.00'
-  const volume24h = ticker?.volume24h || priceInfo?.volume24h || '125000000'
+  // Use real-time data - no mock fallback, show loading state for missing data
+  const currentPrice = ticker?.lastPrice || priceInfo?.markPrice || '--'
+  const change24h = ticker?.change24h || priceInfo?.change24h || '--'
+  const high24h = ticker?.high24h || priceInfo?.high24h || '--'
+  const low24h = ticker?.low24h || priceInfo?.low24h || '--'
+  const volume24h = ticker?.volume24h || priceInfo?.volume24h || '0'
 
   // Format volume for display
   const formatVolume = (vol: string): string => {
@@ -44,6 +51,9 @@ export default function TradePage() {
 
   // Format change percentage
   const formatChange = (change: string): { text: string; positive: boolean } => {
+    if (change === '--') {
+      return { text: '--', positive: true }
+    }
     const num = parseFloat(change.replace('%', '').replace('+', ''))
     const positive = !change.startsWith('-')
     return {
@@ -53,7 +63,8 @@ export default function TradePage() {
   }
 
   const changeFormatted = formatChange(change24h)
-  const displayPositions = positions.length > 0 ? positions : mockPositions
+  // Use real positions only - no mock fallback
+  const displayPositions = positions
 
   // Tab state for bottom panel
   const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'history'>('positions')
@@ -66,7 +77,7 @@ export default function TradePage() {
           <div className="flex items-center space-x-6">
             <div>
               <div className="text-2xl font-bold text-white font-mono">
-                ${parseFloat(currentPrice).toLocaleString()}
+                {currentPrice === '--' ? '--' : `$${parseFloat(currentPrice).toLocaleString()}`}
               </div>
               <div className="flex items-center space-x-2 mt-1">
                 <span className="text-xs text-dark-400">BTC-USDC</span>
@@ -88,13 +99,13 @@ export default function TradePage() {
             <div>
               <div className="text-xs text-dark-400">24h High</div>
               <div className="text-white font-mono">
-                ${parseFloat(high24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {high24h === '--' ? '--' : `$${parseFloat(high24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
             </div>
             <div>
               <div className="text-xs text-dark-400">24h Low</div>
               <div className="text-white font-mono">
-                ${parseFloat(low24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {low24h === '--' ? '--' : `$${parseFloat(low24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
             </div>
             <div>

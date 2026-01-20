@@ -1,0 +1,108 @@
+# PerpDEX Local Network Configuration
+# This configuration is used for local development and testing
+
+# Chain configuration
+chain:
+  id: "perpdex-local-1"
+  rpc: "http://localhost:26657"
+  rest: "http://localhost:1317"
+  grpc: "localhost:9090"
+  genesis_time: "2024-01-01T00:00:00Z"
+
+# API Server configuration
+api:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: "30s"
+  write_timeout: "30s"
+
+  # Engine mode: "mock" or "real"
+  engine_mode: "real"
+
+  # Fallback to mock if real engine fails
+  mock_fallback: false
+
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_second: 100
+    burst: 200
+
+# Performance tuning
+performance:
+  # Enable parallel order matching
+  parallel_matching: true
+
+  # Number of parallel workers
+  workers: 4
+
+  # Batch size for order processing
+  batch_size: 100
+
+  # Cache configuration
+  cache:
+    enabled: true
+    order_cache_size: 10000
+    orderbook_cache_size: 100
+
+# Market configuration
+markets:
+  - id: "BTC-USDC"
+    base_asset: "BTC"
+    quote_asset: "USDC"
+    taker_fee_rate: "0.0006"
+    maker_fee_rate: "0.0001"
+    initial_margin: "0.01"
+    maintenance_margin: "0.005"
+    max_leverage: 100
+
+  - id: "ETH-USDC"
+    base_asset: "ETH"
+    quote_asset: "USDC"
+    taker_fee_rate: "0.0006"
+    maker_fee_rate: "0.0001"
+    initial_margin: "0.01"
+    maintenance_margin: "0.005"
+    max_leverage: 100
+
+  - id: "SOL-USDC"
+    base_asset: "SOL"
+    quote_asset: "USDC"
+    taker_fee_rate: "0.0006"
+    maker_fee_rate: "0.0001"
+    initial_margin: "0.02"
+    maintenance_margin: "0.01"
+    max_leverage: 50
+
+# External data sources
+data_sources:
+  # Hyperliquid for real market data
+  hyperliquid:
+    enabled: true
+    api_url: "https://api.hyperliquid.xyz/info"
+    ws_url: "wss://api.hyperliquid.xyz/ws"
+    timeout: "10s"
+
+  # Use for market data (prices, orderbook display, klines)
+  use_for_market_data: true
+
+  # Do NOT use for trading operations
+  use_for_trading: false
+
+# Logging
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+# Development settings
+development:
+  # Enable debug endpoints
+  debug_endpoints: true
+
+  # Auto-fund test accounts
+  auto_fund_accounts: true
+  fund_amount: "10000"
+
+  # Enable hot reload
+  hot_reload: false

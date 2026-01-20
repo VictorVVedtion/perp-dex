@@ -1,0 +1,13 @@
+version: v2
+plugins:
+  - local: protoc-gen-gogo
+    out: x
+    opt:
+      - paths=source_relative
+      - plugins=grpc
+      - Mgoogle/protobuf/any.proto=github.com/cosmos/gogoproto/types
+      - Mcosmos/msg/v1/msg.proto=cosmossdk.io/api/cosmos/msg/v1
+      - Mcosmos_proto/cosmos.proto=github.com/cosmos/cosmos-proto
+      - Mamino/amino.proto=github.com/cosmos/cosmos-sdk/types/tx/amino
+inputs:
+  - directory: proto

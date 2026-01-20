@@ -1,0 +1,118 @@
+╔══════════════════════════════════════════════════════════════╗
+║           PerpDEX API Load Test - Order Placement            ║
+╚══════════════════════════════════════════════════════════════╝
+
+Configuration:
+  Base URL:     http://localhost:8080
+  Concurrency:  50 workers
+  Duration:     30s
+  Ramp-up:      5s
+  Markets:      [BTC-USDC ETH-USDC SOL-USDC]
+  Traders:      100
+
+Checking server health... OK
+
+Starting load test...
+  Workers: 5/50  Workers: 10/50  Workers: 15/50  Workers: 20/50  Workers: 25/50  Workers: 30/50  Workers: 35/50  Workers: 40/50  Workers: 45/50  Workers: 50/50
+
+  Progress: 78782 requests (8292/s), Success: 217, Failed: 78565  Progress: 133021 requests (9174/s), Success: 217, Failed: 132804  Progress: 187486 requests (9614/s), Success: 217, Failed: 187269  Progress: 241712 requests (9866/s), Success: 217, Failed: 241495  Progress: 296040 requests (10035/s), Success: 217, Failed: 295823  Progress: 350423 requests (10157/s), Success: 217, Failed: 350206
+
+╔══════════════════════════════════════════════════════════════╗
+║                      LOAD TEST RESULTS                       ║
+╚══════════════════════════════════════════════════════════════╝
+
+Test Duration:        34.51s
+Concurrency:          50 workers
+
+── Request Statistics ─────────────────────────────────────────
+  Total Requests:     350424
+  Successful:         217 (0.06%)
+  Failed:             350207 (99.94%)
+  Requests/Second:    10154.37
+
+── Latency Statistics (ms) ────────────────────────────────────
+  Min:                0.02 ms
+  Max:                6.87 ms
+  Average:            0.07 ms
+  P50 (Median):       0.07 ms
+  P90:                0.09 ms
+  P95:                0.11 ms
+  P99:                0.23 ms
+
+── Status Code Distribution ───────────────────────────────────
+  HTTP 201:             217 (0.06%)
+  HTTP 429:             350207 (99.94%)
+
+── Assessment ─────────────────────────────────────────────────
+  ❌ Poor: <95% success rate
+  ✅ Excellent latency: <10ms average
+  ✅ High throughput: >1000 req/s
+
+══════════════════════════════════════════════════════════════
+╔══════════════════════════════════════════════════════════════╗
+║           PerpDEX API Load Test - Order Placement            ║
+╚══════════════════════════════════════════════════════════════╝
+
+Configuration:
+  Base URL:     http://localhost:8080
+  Concurrency:  5 workers
+  Duration:     20s
+  Ramp-up:      5s
+  Markets:      [BTC-USDC ETH-USDC SOL-USDC]
+  Traders:      100
+
+Checking server health... FAILED: unhealthy status: 429
+
+Please ensure the API server is running:
+  cd cmd/api && go run main.go
+╔══════════════════════════════════════════════════════════════╗
+║           PerpDEX API Load Test - Order Placement            ║
+╚══════════════════════════════════════════════════════════════╝
+
+Configuration:
+  Base URL:     http://localhost:8080
+  Concurrency:  5 workers
+  Duration:     20s
+  Ramp-up:      5s
+  Markets:      [BTC-USDC ETH-USDC SOL-USDC]
+  Traders:      100
+
+Checking server health... OK
+
+Starting load test...
+  Workers: 1/5  Workers: 2/5  Workers: 3/5  Workers: 4/5  Workers: 5/5
+
+  Progress: 6301 requests (900/s), Success: 301, Failed: 6000  Progress: 11649 requests (971/s), Success: 301, Failed: 11348  Progress: 16918 requests (995/s), Success: 301, Failed: 16617  Progress: 22213 requests (1010/s), Success: 301, Failed: 21912
+
+╔══════════════════════════════════════════════════════════════╗
+║                      LOAD TEST RESULTS                       ║
+╚══════════════════════════════════════════════════════════════╝
+
+Test Duration:        22.008s
+Concurrency:          5 workers
+
+── Request Statistics ─────────────────────────────────────────
+  Total Requests:     22213
+  Successful:         301 (1.36%)
+  Failed:             21912 (98.64%)
+  Requests/Second:    1009.32
+
+── Latency Statistics (ms) ────────────────────────────────────
+  Min:                0.04 ms
+  Max:                3.40 ms
+  Average:            0.11 ms
+  P50 (Median):       0.10 ms
+  P90:                0.15 ms
+  P95:                0.19 ms
+  P99:                0.32 ms
+
+── Status Code Distribution ───────────────────────────────────
+  HTTP 201:             301 (1.36%)
+  HTTP 429:             21912 (98.64%)
+
+── Assessment ─────────────────────────────────────────────────
+  ❌ Poor: <95% success rate
+  ✅ Excellent latency: <10ms average
+  ✅ High throughput: >1000 req/s
+
+══════════════════════════════════════════════════════════════

@@ -7,7 +7,8 @@
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Cosmos SDK](https://img.shields.io/badge/Cosmos%20SDK-0.50.11-blue?style=flat)](https://cosmos.network/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-50%20Passing-success)](COMPREHENSIVE_TEST_REPORT.md)
+[![Tests](https://img.shields.io/badge/Tests-100%25%20E2E%20Pass-success)](COMPREHENSIVE_TEST_REPORT.md)
+[![API Coverage](https://img.shields.io/badge/API%20Coverage-19%2F20-blue)](tests/e2e_comprehensive/)
 
 </div>
 

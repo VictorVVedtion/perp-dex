@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { mockAccount, mockPositions, mockPriceInfo } from '@/stores/tradingStore'
+import { useState, useMemo } from 'react'
+import { useTradingStore } from '@/stores/tradingStore'
+import { useWallet } from '@/hooks/useWallet'
 import BigNumber from 'bignumber.js'
 
 export default function AccountPage() {
@@ -7,19 +8,33 @@ export default function AccountPage() {
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
 
-  const account = mockAccount
+  const { connected, address } = useWallet()
+  const { account: storeAccount, positions, priceInfo } = useTradingStore()
 
-  // Calculate total unrealized PnL
-  const totalUnrealizedPnL = mockPositions.reduce((sum, pos) => {
-    const markPrice = new BigNumber(mockPriceInfo.markPrice)
-    const entryPrice = new BigNumber(pos.entryPrice)
-    const size = new BigNumber(pos.size)
-    let priceDiff = markPrice.minus(entryPrice)
-    if (pos.side === 'short') {
-      priceDiff = priceDiff.negated()
+  // Use store account or default empty account
+  const account = storeAccount || {
+    trader: address || '',
+    balance: '0',
+    lockedMargin: '0',
+    totalEquity: '0',
+  }
+
+  // Calculate total unrealized PnL from real positions
+  const totalUnrealizedPnL = useMemo(() => {
+    if (!priceInfo || positions.length === 0) {
+      return new BigNumber(0)
     }
-    return sum.plus(size.times(priceDiff))
-  }, new BigNumber(0))
+    return positions.reduce((sum, pos) => {
+      const markPrice = new BigNumber(priceInfo.markPrice)
+      const entryPrice = new BigNumber(pos.entryPrice)
+      const size = new BigNumber(pos.size)
+      let priceDiff = markPrice.minus(entryPrice)
+      if (pos.side === 'short') {
+        priceDiff = priceDiff.negated()
+      }
+      return sum.plus(size.times(priceDiff))
+    }, new BigNumber(0))
+  }, [positions, priceInfo])
 
   const totalEquity = new BigNumber(account.balance).plus(totalUnrealizedPnL)
   const availableBalance = new BigNumber(account.balance).minus(account.lockedMargin)
@@ -104,7 +119,7 @@ export default function AccountPage() {
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-dark-400">Open Positions</span>
-                <span className="text-white">{mockPositions.length}</span>
+                <span className="text-white">{positions.length}</span>
               </div>
             </div>
           </div>

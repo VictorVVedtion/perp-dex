@@ -56,23 +56,23 @@ Examples:
 			quantityStr := args[4]
 
 			// Parse side
-			var side int32
+			var side types.Side
 			switch sideStr {
 			case "buy":
-				side = types.CLIOrderSideBuy
+				side = types.SideBuy
 			case "sell":
-				side = types.CLIOrderSideSell
+				side = types.SideSell
 			default:
 				return fmt.Errorf("invalid side: %s (use 'buy' or 'sell')", sideStr)
 			}
 
 			// Parse order type
-			var orderType int32
+			var orderType types.OrderType
 			switch orderTypeStr {
 			case "limit":
-				orderType = types.CLIOrderTypeLimit
+				orderType = types.OrderTypeLimit
 			case "market":
-				orderType = types.CLIOrderTypeMarket
+				orderType = types.OrderTypeMarket
 			default:
 				return fmt.Errorf("invalid order type: %s (use 'limit' or 'market')", orderTypeStr)
 			}
@@ -89,7 +89,7 @@ Examples:
 
 			msg := &types.MsgPlaceOrder{
 				Trader:    clientCtx.GetFromAddress().String(),
-				MarketID:  marketID,
+				MarketId:  marketID,
 				Side:      side,
 				OrderType: orderType,
 				Price:     fmt.Sprintf("%f", price),
@@ -118,7 +118,7 @@ func CmdCancelOrder() *cobra.Command {
 
 			msg := &types.MsgCancelOrder{
 				Trader:  clientCtx.GetFromAddress().String(),
-				OrderID: args[0],
+				OrderId: args[0],
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)

@@ -1,0 +1,83 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/openalpha/perp-dex/tests/benchmark
+cpu: Apple M4 Pro
+BenchmarkOrderBookV2_AddOrder-14             	 1447756	       858.4 ns/op	     732 B/op	      21 allocs/op
+BenchmarkOrderBookV2_AddOrder-14             	 1469179	       868.0 ns/op	     731 B/op	      21 allocs/op
+BenchmarkOrderBookV2_AddOrder-14             	 1434594	       855.1 ns/op	     732 B/op	      21 allocs/op
+BenchmarkOrderBookV2_RemoveOrder-14          	 1885008	       699.1 ns/op	     239 B/op	       8 allocs/op
+BenchmarkOrderBookV2_RemoveOrder-14          	 2028020	       717.6 ns/op	     239 B/op	       8 allocs/op
+BenchmarkOrderBookV2_RemoveOrder-14          	 1969520	       681.9 ns/op	     239 B/op	       8 allocs/op
+BenchmarkOrderBookV2_GetBestBid-14           	308358078	         3.897 ns/op	       0 B/op	       0 allocs/op
+BenchmarkOrderBookV2_GetBestBid-14           	307889310	         3.914 ns/op	       0 B/op	       0 allocs/op
+BenchmarkOrderBookV2_GetBestBid-14           	306934480	         3.911 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMatchingEngineV2_ProcessOrder-14    	  604119	      1699 ns/op	    2619 B/op	      38 allocs/op
+BenchmarkMatchingEngineV2_ProcessOrder-14    	  618336	      1676 ns/op	    2593 B/op	      38 allocs/op
+BenchmarkMatchingEngineV2_ProcessOrder-14    	  612092	      1684 ns/op	    2604 B/op	      38 allocs/op
+BenchmarkMatchingEngineV2_Match10K-14        	      28	  42323704 ns/op	53227169 B/op	  598813 allocs/op
+BenchmarkMatchingEngineV2_Match10K-14        	      27	  41990750 ns/op	53247118 B/op	  598966 allocs/op
+BenchmarkMatchingEngineV2_Match10K-14        	      28	  42138071 ns/op	53226975 B/op	  598945 allocs/op
+BenchmarkMatchingEngineV2_BatchProcess-14    	    1654	    779680 ns/op	 1156894 B/op	   13234 allocs/op
+BenchmarkMatchingEngineV2_BatchProcess-14    	    1652	    766317 ns/op	 1161702 B/op	   13264 allocs/op
+BenchmarkMatchingEngineV2_BatchProcess-14    	    1718	    778966 ns/op	 1154628 B/op	   13224 allocs/op
+BenchmarkOrderBookV2_ConcurrentAdd-14        	  866996	      1290 ns/op	     748 B/op	      21 allocs/op
+BenchmarkOrderBookV2_ConcurrentAdd-14        	  893169	      1272 ns/op	     748 B/op	      21 allocs/op
+BenchmarkOrderBookV2_ConcurrentAdd-14        	  881826	      1316 ns/op	     748 B/op	      21 allocs/op
+BenchmarkOrderBookV2_MemoryUsage-14          	 1420970	       851.1 ns/op	     732 B/op	      21 allocs/op
+BenchmarkOrderBookV2_MemoryUsage-14          	 1427977	       839.4 ns/op	     732 B/op	      21 allocs/op
+BenchmarkOrderBookV2_MemoryUsage-14          	 1423332	       841.4 ns/op	     732 B/op	      21 allocs/op
+BenchmarkMatchingEngineV2_Latency-14         	  406892	      3039 ns/op	      2817 ns/op-avg	   2834834 ns/op-max	      1500 ns/op-min	    4436 B/op	      77 allocs/op
+BenchmarkMatchingEngineV2_Latency-14         	  419644	      3025 ns/op	      2803 ns/op-avg	   5626375 ns/op-max	      1500 ns/op-min	    4425 B/op	      77 allocs/op
+BenchmarkMatchingEngineV2_Latency-14         	  401206	      3048 ns/op	      2824 ns/op-avg	   3276875 ns/op-max	      1500 ns/op-min	    4442 B/op	      77 allocs/op
+BenchmarkOrderBookV2_1K_Orders-14            	 1230057	      1013 ns/op	     735 B/op	      21 allocs/op
+BenchmarkOrderBookV2_1K_Orders-14            	 1220812	       995.0 ns/op	     734 B/op	      21 allocs/op
+BenchmarkOrderBookV2_1K_Orders-14            	 1209798	      1015 ns/op	     733 B/op	      21 allocs/op
+BenchmarkOrderBookV2_10K_Orders-14           	 1000000	      1013 ns/op	     730 B/op	      21 allocs/op
+BenchmarkOrderBookV2_10K_Orders-14           	 1000000	      1006 ns/op	     730 B/op	      21 allocs/op
+BenchmarkOrderBookV2_10K_Orders-14           	 1000000	      1007 ns/op	     730 B/op	      21 allocs/op
+BenchmarkOrderBookV2_100K_Orders-14          	 1180796	      1024 ns/op	     731 B/op	      21 allocs/op
+BenchmarkOrderBookV2_100K_Orders-14          	 1220180	       994.7 ns/op	     734 B/op	      21 allocs/op
+BenchmarkOrderBookV2_100K_Orders-14          	 1000000	      1026 ns/op	     730 B/op	      21 allocs/op
+BenchmarkOrderBookV2_DeepBook-14             	  979531	      1204 ns/op	     919 B/op	      30 allocs/op
+BenchmarkOrderBookV2_DeepBook-14             	  984567	      1173 ns/op	     919 B/op	      30 allocs/op
+BenchmarkOrderBookV2_DeepBook-14             	  962344	      1168 ns/op	     919 B/op	      30 allocs/op
+BenchmarkMatchingEngine_HighFrequency-14     	  669673	      1957 ns/op	    2247 B/op	      39 allocs/op
+BenchmarkMatchingEngine_HighFrequency-14     	  697317	      1940 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkMatchingEngine_HighFrequency-14     	  677619	      1965 ns/op	    2245 B/op	      39 allocs/op
+BenchmarkMatchingEngine_BatchVsSingle/SingleOrder-14         	  491281	      2674 ns/op	    3419 B/op	      58 allocs/op
+BenchmarkMatchingEngine_BatchVsSingle/SingleOrder-14         	  501226	      2667 ns/op	    3414 B/op	      58 allocs/op
+BenchmarkMatchingEngine_BatchVsSingle/SingleOrder-14         	  503143	      2695 ns/op	    3412 B/op	      58 allocs/op
+BenchmarkMatchingEngine_BatchVsSingle/Batch100-14            	    1624	    824568 ns/op	 1207882 B/op	   14554 allocs/op
+BenchmarkMatchingEngine_BatchVsSingle/Batch100-14            	    1654	    820944 ns/op	 1201060 B/op	   14514 allocs/op
+BenchmarkMatchingEngine_BatchVsSingle/Batch100-14            	    1683	    820677 ns/op	 1207442 B/op	   14556 allocs/op
+BenchmarkLatencyDistribution/EmptyBook_Market-14             	 1000000	      1117 ns/op	       850.5 ns/op-avg	       583.0 ns/op-p50	      3084 ns/op-p99	    1719 B/op	      18 allocs/op
+BenchmarkLatencyDistribution/EmptyBook_Market-14             	 1000000	      1123 ns/op	       855.7 ns/op-avg	       583.0 ns/op-p50	      2958 ns/op-p99	    1719 B/op	      18 allocs/op
+BenchmarkLatencyDistribution/EmptyBook_Market-14             	 1000000	      1150 ns/op	       876.7 ns/op-avg	       583.0 ns/op-p50	      3125 ns/op-p99	    1719 B/op	      18 allocs/op
+BenchmarkLatencyDistribution/SmallBook_Market-14             	  930409	      1122 ns/op	       853.4 ns/op-avg	       583.0 ns/op-p50	      2958 ns/op-p99	    1700 B/op	      18 allocs/op
+BenchmarkLatencyDistribution/SmallBook_Market-14             	 1070541	      1123 ns/op	       852.1 ns/op-avg	       583.0 ns/op-p50	      3041 ns/op-p99	    1710 B/op	      18 allocs/op
+BenchmarkLatencyDistribution/SmallBook_Market-14             	  912931	      1117 ns/op	       848.7 ns/op-avg	       583.0 ns/op-p50	      3250 ns/op-p99	    1677 B/op	      18 allocs/op
+BenchmarkLatencyDistribution/MediumBook_Market-14            	 1082161	      1178 ns/op	       901.3 ns/op-avg	       583.0 ns/op-p50	      3417 ns/op-p99	    1755 B/op	      19 allocs/op
+BenchmarkLatencyDistribution/MediumBook_Market-14            	 1062601	      1155 ns/op	       888.8 ns/op-avg	       583.0 ns/op-p50	      3291 ns/op-p99	    1760 B/op	      19 allocs/op
+BenchmarkLatencyDistribution/MediumBook_Market-14            	 1097388	      1177 ns/op	       910.1 ns/op-avg	       583.0 ns/op-p50	      3416 ns/op-p99	    1752 B/op	      19 allocs/op
+BenchmarkLatencyDistribution/LargeBook_Market-14             	  483982	      2154 ns/op	      1871 ns/op-avg	       834.0 ns/op-p50	      9208 ns/op-p99	    3118 B/op	      50 allocs/op
+BenchmarkLatencyDistribution/LargeBook_Market-14             	  548979	      2021 ns/op	      1739 ns/op-avg	       750.0 ns/op-p50	      8334 ns/op-p99	    2926 B/op	      47 allocs/op
+BenchmarkLatencyDistribution/LargeBook_Market-14             	  477062	      2167 ns/op	      1886 ns/op-avg	       833.0 ns/op-p50	      9459 ns/op-p99	    3141 B/op	      51 allocs/op
+BenchmarkLatencyDistribution/SmallBook_Limit-14              	  496754	      2776 ns/op	      2489 ns/op-avg	      2208 ns/op-p50	      9916 ns/op-p99	    3433 B/op	      58 allocs/op
+BenchmarkLatencyDistribution/SmallBook_Limit-14              	  479538	      2723 ns/op	      2444 ns/op-avg	      2167 ns/op-p50	      9666 ns/op-p99	    3440 B/op	      58 allocs/op
+BenchmarkLatencyDistribution/SmallBook_Limit-14              	  478706	      2745 ns/op	      2448 ns/op-avg	      2208 ns/op-p50	      9708 ns/op-p99	    3436 B/op	      58 allocs/op
+BenchmarkLatencyDistribution/LargeBook_Limit-14              	  425208	      2730 ns/op	      2445 ns/op-avg	      2208 ns/op-p50	      9208 ns/op-p99	    3349 B/op	      58 allocs/op
+BenchmarkLatencyDistribution/LargeBook_Limit-14              	  434691	      2674 ns/op	      2398 ns/op-avg	      2208 ns/op-p50	      8625 ns/op-p99	    3366 B/op	      58 allocs/op
+BenchmarkLatencyDistribution/LargeBook_Limit-14              	  431467	      2698 ns/op	      2420 ns/op-avg	      2208 ns/op-p50	      8917 ns/op-p99	    3356 B/op	      58 allocs/op
+PASS
+ok  	github.com/openalpha/perp-dex/tests/benchmark	115.370s
+=== RUN   TestStress10K
+    engine_benchmark_test.go:734: === 10K Order Stress Test Results ===
+    engine_benchmark_test.go:735: Orders processed: 10000
+    engine_benchmark_test.go:736: Trades executed:  3888
+    engine_benchmark_test.go:737: Total time:       62.843416ms
+    engine_benchmark_test.go:738: Orders/second:    159125.66
+    engine_benchmark_test.go:739: Avg latency:      6.284µs
+    engine_benchmark_test.go:745: PASS: Performance within target (<100ms for 10K orders)
+--- PASS: TestStress10K (0.07s)
+PASS
+ok  	github.com/openalpha/perp-dex/tests/benchmark	0.310s

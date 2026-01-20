@@ -10,6 +10,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/std"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
+
+	orderbooktypes "github.com/openalpha/perp-dex/x/orderbook/types"
+	perpetualtypes "github.com/openalpha/perp-dex/x/perpetual/types"
 )
 
 // EncodingConfig specifies the concrete encoding types to use
@@ -67,6 +70,10 @@ func MakeEncodingConfig() EncodingConfig {
 	// Register module interfaces
 	ModuleBasics.RegisterLegacyAminoCodec(amino)
 	ModuleBasics.RegisterInterfaces(interfaceRegistry)
+
+	// Register custom module interfaces
+	orderbooktypes.RegisterInterfaces(interfaceRegistry)
+	perpetualtypes.RegisterInterfaces(interfaceRegistry)
 
 	return EncodingConfig{
 		InterfaceRegistry: interfaceRegistry,

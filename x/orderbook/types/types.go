@@ -6,10 +6,17 @@ import (
 	"time"
 
 	"cosmossdk.io/math"
+	proto "github.com/cosmos/gogoproto/proto"
 )
 
-// Side represents order side
-type Side int
+func init() {
+	proto.RegisterEnum("perpdex.orderbook.v1.Side", Side_name, Side_value)
+	proto.RegisterEnum("perpdex.orderbook.v1.OrderType", OrderType_name, OrderType_value)
+	proto.RegisterEnum("perpdex.orderbook.v1.OrderStatus", OrderStatus_name, OrderStatus_value)
+}
+
+// Side represents order side (int32 for proto compatibility)
+type Side int32
 
 const (
 	SideUnspecified Side = iota
@@ -17,14 +24,34 @@ const (
 	SideSell
 )
 
+// Proto-compatible aliases for Side enum
+const (
+	Side_SIDE_UNSPECIFIED = SideUnspecified
+	Side_SIDE_BUY         = SideBuy
+	Side_SIDE_SELL        = SideSell
+)
+
+// Proto-compatible maps for Side enum
+var Side_name = map[int32]string{
+	0: "SIDE_UNSPECIFIED",
+	1: "SIDE_BUY",
+	2: "SIDE_SELL",
+}
+
+var Side_value = map[string]int32{
+	"SIDE_UNSPECIFIED": 0,
+	"SIDE_BUY":         1,
+	"SIDE_SELL":        2,
+}
+
 func (s Side) String() string {
 	switch s {
 	case SideBuy:
-		return "buy"
+		return "SIDE_BUY"
 	case SideSell:
-		return "sell"
+		return "SIDE_SELL"
 	default:
-		return "unspecified"
+		return "SIDE_UNSPECIFIED"
 	}
 }
 
@@ -35,8 +62,8 @@ func (s Side) Opposite() Side {
 	return SideBuy
 }
 
-// OrderType represents order type
-type OrderType int
+// OrderType represents order type (int32 for proto compatibility)
+type OrderType int32
 
 const (
 	OrderTypeUnspecified OrderType = iota
@@ -44,19 +71,39 @@ const (
 	OrderTypeMarket
 )
 
+// Proto-compatible aliases for OrderType enum
+const (
+	OrderType_ORDER_TYPE_UNSPECIFIED = OrderTypeUnspecified
+	OrderType_ORDER_TYPE_LIMIT       = OrderTypeLimit
+	OrderType_ORDER_TYPE_MARKET      = OrderTypeMarket
+)
+
+// Proto-compatible maps for OrderType enum
+var OrderType_name = map[int32]string{
+	0: "ORDER_TYPE_UNSPECIFIED",
+	1: "ORDER_TYPE_LIMIT",
+	2: "ORDER_TYPE_MARKET",
+}
+
+var OrderType_value = map[string]int32{
+	"ORDER_TYPE_UNSPECIFIED": 0,
+	"ORDER_TYPE_LIMIT":       1,
+	"ORDER_TYPE_MARKET":      2,
+}
+
 func (t OrderType) String() string {
 	switch t {
 	case OrderTypeLimit:
-		return "limit"
+		return "ORDER_TYPE_LIMIT"
 	case OrderTypeMarket:
-		return "market"
+		return "ORDER_TYPE_MARKET"
 	default:
-		return "unspecified"
+		return "ORDER_TYPE_UNSPECIFIED"
 	}
 }
 
-// OrderStatus represents order status
-type OrderStatus int
+// OrderStatus represents order status (int32 for proto compatibility)
+type OrderStatus int32
 
 const (
 	OrderStatusUnspecified OrderStatus = iota
@@ -66,18 +113,44 @@ const (
 	OrderStatusCancelled
 )
 
+// Proto-compatible aliases for OrderStatus enum
+const (
+	OrderStatus_ORDER_STATUS_UNSPECIFIED       = OrderStatusUnspecified
+	OrderStatus_ORDER_STATUS_OPEN              = OrderStatusOpen
+	OrderStatus_ORDER_STATUS_FILLED            = OrderStatusFilled
+	OrderStatus_ORDER_STATUS_PARTIALLY_FILLED  = OrderStatusPartiallyFilled
+	OrderStatus_ORDER_STATUS_CANCELLED         = OrderStatusCancelled
+)
+
+// Proto-compatible maps for OrderStatus enum
+var OrderStatus_name = map[int32]string{
+	0: "ORDER_STATUS_UNSPECIFIED",
+	1: "ORDER_STATUS_OPEN",
+	2: "ORDER_STATUS_FILLED",
+	3: "ORDER_STATUS_PARTIALLY_FILLED",
+	4: "ORDER_STATUS_CANCELLED",
+}
+
+var OrderStatus_value = map[string]int32{
+	"ORDER_STATUS_UNSPECIFIED":      0,
+	"ORDER_STATUS_OPEN":             1,
+	"ORDER_STATUS_FILLED":           2,
+	"ORDER_STATUS_PARTIALLY_FILLED": 3,
+	"ORDER_STATUS_CANCELLED":        4,
+}
+
 func (s OrderStatus) String() string {
 	switch s {
 	case OrderStatusOpen:
-		return "open"
+		return "ORDER_STATUS_OPEN"
 	case OrderStatusFilled:
-		return "filled"
+		return "ORDER_STATUS_FILLED"
 	case OrderStatusPartiallyFilled:
-		return "partially_filled"
+		return "ORDER_STATUS_PARTIALLY_FILLED"
 	case OrderStatusCancelled:
-		return "cancelled"
+		return "ORDER_STATUS_CANCELLED"
 	default:
-		return "unspecified"
+		return "ORDER_STATUS_UNSPECIFIED"
 	}
 }
 

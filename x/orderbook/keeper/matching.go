@@ -107,6 +107,16 @@ func (me *MatchingEngine) Match(ctx sdk.Context, order *types.Order) (*MatchResu
 				return nil, fmt.Errorf("failed to fill maker order: %w", err)
 			}
 
+			// Update positions for both traders (CRITICAL: creates real positions)
+			// Taker: order.Side determines position direction (buy=long, sell=short)
+			if err := me.keeper.perpetualKeeper.UpdatePosition(ctx, order.Trader, order.MarketID, order.Side, matchQty, matchPrice, takerFee); err != nil {
+				me.keeper.Logger().Error("failed to update taker position", "trader", order.Trader, "error", err)
+			}
+			// Maker: makerOrder.Side determines position direction
+			if err := me.keeper.perpetualKeeper.UpdatePosition(ctx, makerOrder.Trader, makerOrder.MarketID, makerOrder.Side, matchQty, matchPrice, makerFee); err != nil {
+				me.keeper.Logger().Error("failed to update maker position", "trader", makerOrder.Trader, "error", err)
+			}
+
 			// Update tracking
 			result.FilledQty = result.FilledQty.Add(matchQty)
 			result.RemainingQty = result.RemainingQty.Sub(matchQty)

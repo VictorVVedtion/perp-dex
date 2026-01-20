@@ -22,6 +22,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/cosmos-sdk/x/crisis"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
+	authcli "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/spf13/cobra"
 
 	tmcfg "github.com/cometbft/cometbft/config"
@@ -118,6 +119,8 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig app.EncodingConfig, basi
 		RunE:                       client.ValidateCmd,
 	}
 	queryCmd.AddCommand(
+		authcli.QueryTxsByEventsCmd(),
+		authcli.QueryTxCmd(),
 		perpetualcli.GetQueryCmd(),
 		orderbookcli.GetQueryCmd(),
 		clearinghousecli.GetQueryCmd(),
@@ -133,6 +136,8 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig app.EncodingConfig, basi
 		RunE:                       client.ValidateCmd,
 	}
 	txCmd.AddCommand(
+		authcli.GetSignCommand(),
+		authcli.GetBroadcastCommand(),
 		perpetualcli.GetTxCmd(),
 		orderbookcli.GetTxCmd(),
 	)

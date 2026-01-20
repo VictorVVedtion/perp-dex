@@ -19,6 +19,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/grpc/cmtservice"
 	nodeservice "github.com/cosmos/cosmos-sdk/client/grpc/node"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/address"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/server/api"
@@ -27,19 +28,25 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth"
+	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/cosmos-sdk/x/bank"
+	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/cosmos-sdk/x/consensus"
 	consensusparamkeeper "github.com/cosmos/cosmos-sdk/x/consensus/keeper"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
-	"github.com/cosmos/gogoproto/grpc"
+	gogoprotograpc "github.com/cosmos/gogoproto/grpc"
 
 	clearinghousekeeper "github.com/openalpha/perp-dex/x/clearinghouse/keeper"
 	orderbookkeeper "github.com/openalpha/perp-dex/x/orderbook/keeper"
+	orderbooktypes "github.com/openalpha/perp-dex/x/orderbook/types"
 	perpetualkeeper "github.com/openalpha/perp-dex/x/perpetual/keeper"
+	perpetualtypes "github.com/openalpha/perp-dex/x/perpetual/types"
 )
 
 const (
@@ -84,6 +91,8 @@ type App struct {
 
 	// SDK Keepers
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
+	AccountKeeper         authkeeper.AccountKeeper
+	BankKeeper            bankkeeper.BaseKeeper
 
 	// Custom module keepers
 	OrderbookKeeper     *orderbookkeeper.Keeper
@@ -116,6 +125,8 @@ func NewApp(
 
 	// Define store keys
 	keys := storetypes.NewKVStoreKeys(
+		authtypes.StoreKey,
+		banktypes.StoreKey,
 		"orderbook",
 		"perpetual",
 		"clearinghouse",
@@ -145,12 +156,44 @@ func NewApp(
 	)
 	bApp.SetParamStore(app.ConsensusParamsKeeper.ParamsStore)
 
+	// Module account permissions
+	maccPerms := map[string][]string{
+		authtypes.FeeCollectorName: nil,
+		"perpetual":                {authtypes.Minter, authtypes.Burner},
+	}
+
+	// Create address codec
+	addrCodec := address.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix())
+
+	// Initialize account keeper
+	app.AccountKeeper = authkeeper.NewAccountKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[authtypes.StoreKey]),
+		authtypes.ProtoBaseAccount,
+		maccPerms,
+		addrCodec,
+		sdk.GetConfig().GetBech32AccountAddrPrefix(),
+		"", // authority - empty for MVP
+	)
+
+	// Initialize bank keeper
+	// Authority is set to the governance module address for bank operations
+	bankAuthority := authtypes.NewModuleAddress("gov").String()
+	app.BankKeeper = bankkeeper.NewBaseKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
+		app.AccountKeeper,
+		BlockedModuleAccountAddrs(maccPerms),
+		bankAuthority,
+		logger,
+	)
+
 	// Initialize custom keepers
 	app.PerpetualKeeper = perpetualkeeper.NewKeeper(
 		appCodec,
 		keys["perpetual"],
-		nil, // bank keeper - simplified for MVP
-		"",  // authority
+		app.BankKeeper, // bank keeper for fund transfers
+		"",             // authority
 		logger,
 	)
 
@@ -169,6 +212,17 @@ func NewApp(
 		nil, // orderbook keeper interface
 		logger,
 	)
+
+	// Register message types with the interface registry
+	orderbooktypes.RegisterInterfaces(interfaceRegistry)
+	perpetualtypes.RegisterInterfaces(interfaceRegistry)
+
+	// Register MsgServer for custom modules with the message service router
+	orderbooktypes.RegisterMsgServer(bApp.MsgServiceRouter(), orderbookkeeper.NewMsgServerImpl(app.OrderbookKeeper))
+
+	// Register QueryServers for SDK modules
+	authtypes.RegisterQueryServer(bApp.GRPCQueryRouter(), authkeeper.NewQueryServer(app.AccountKeeper))
+	banktypes.RegisterQueryServer(bApp.GRPCQueryRouter(), bankkeeper.NewQuerier(&app.BankKeeper))
 
 	// Mount stores
 	app.MountKVStores(keys)
@@ -483,11 +537,23 @@ func (app *App) RegisterNodeService(clientCtx client.Context, cfg config.Config)
 }
 
 // RegisterGRPCServer registers the app's gRPC services
-func (app *App) RegisterGRPCServer(server grpc.Server) {
-	// Register custom gRPC services here
+func (app *App) RegisterGRPCServer(server gogoprotograpc.Server) {
+	// Custom gRPC services are now registered via MsgServiceRouter in NewApp
 }
 
 // SimulationManager returns the app's simulation manager
 func (app *App) SimulationManager() *module.SimulationManager {
 	return nil
+}
+
+// BlockedModuleAccountAddrs returns module account addresses that should not
+// receive coins (these accounts are typically module accounts like fee collector)
+func BlockedModuleAccountAddrs(maccPerms map[string][]string) map[string]bool {
+	blockedAddrs := make(map[string]bool)
+	for acc := range maccPerms {
+		blockedAddrs[authtypes.NewModuleAddress(acc).String()] = true
+	}
+	// Remove perpetual from blocked addrs as it needs to receive/send funds
+	delete(blockedAddrs, authtypes.NewModuleAddress("perpetual").String())
+	return blockedAddrs
 }

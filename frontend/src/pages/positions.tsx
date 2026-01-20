@@ -1,19 +1,26 @@
+import { useMemo } from 'react'
 import { PositionCard } from '@/components/PositionCard'
-import { mockPositions, mockPriceInfo } from '@/stores/tradingStore'
+import { useTradingStore } from '@/stores/tradingStore'
 
 export default function PositionsPage() {
-  const positions = mockPositions
-  const markPrice = mockPriceInfo.markPrice
+  const { positions, priceInfo, ticker } = useTradingStore()
 
-  // Calculate total PnL
-  const totalUnrealizedPnL = positions.reduce((sum, pos) => {
-    const pnl = parseFloat(pos.unrealizedPnl)
-    return sum + pnl
-  }, 0)
+  // Use real mark price from ticker or priceInfo
+  const markPrice = ticker?.markPrice || priceInfo?.markPrice || '0'
 
-  const totalMargin = positions.reduce((sum, pos) => {
-    return sum + parseFloat(pos.margin)
-  }, 0)
+  // Calculate total PnL from real positions
+  const { totalUnrealizedPnL, totalMargin } = useMemo(() => {
+    const unrealized = positions.reduce((sum, pos) => {
+      const pnl = parseFloat(pos.unrealizedPnl)
+      return sum + pnl
+    }, 0)
+
+    const margin = positions.reduce((sum, pos) => {
+      return sum + parseFloat(pos.margin)
+    }, 0)
+
+    return { totalUnrealizedPnL: unrealized, totalMargin: margin }
+  }, [positions])
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
