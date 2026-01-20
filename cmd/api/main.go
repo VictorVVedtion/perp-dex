@@ -52,14 +52,23 @@ func main() {
 	}()
 
 	engineMode := "mock"
+	storageWarning := ""
 	if *realMode {
 		engineMode = "REAL (MatchingEngineV2)"
+		storageWarning = "\n⚠️  WARNING: Using in-memory storage. Data will be lost on restart.\n   For production, ensure connection to a running Cosmos chain."
 	}
 
-	log.Printf("PerpDEX API Server started on %s:%d", *host, *port)
-	log.Printf("Engine mode: %s", engineMode)
-	log.Printf("WebSocket endpoint: ws://%s:%d/ws", *host, *port)
-	log.Printf("Health check: http://%s:%d/health", *host, *port)
+	log.Printf("╔══════════════════════════════════════════════════════════════╗")
+	log.Printf("║  PerpDEX API Server                                          ║")
+	log.Printf("╠══════════════════════════════════════════════════════════════╣")
+	log.Printf("║  Address:   %s:%d", *host, *port)
+	log.Printf("║  Mode:      %s", engineMode)
+	log.Printf("║  WebSocket: ws://%s:%d/ws", *host, *port)
+	log.Printf("║  Health:    http://%s:%d/health", *host, *port)
+	log.Printf("╚══════════════════════════════════════════════════════════════╝")
+	if storageWarning != "" {
+		log.Print(storageWarning)
+	}
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)

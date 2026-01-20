@@ -46,13 +46,15 @@ type Config struct {
 }
 
 // DefaultConfig returns default configuration
+// NOTE: MockMode defaults to false (real mode) for production safety.
+// Use --mock flag explicitly for development/testing with mock data.
 func DefaultConfig() *Config {
 	return &Config{
 		Host:         "0.0.0.0",
 		Port:         8080,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
-		MockMode:     true, // Default to mock mode for development
+		MockMode:     false, // Default to REAL mode - use --mock for development
 	}
 }
 
@@ -228,10 +230,20 @@ func (s *Server) Stop(ctx context.Context) error {
 
 // handleHealth handles health check requests
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	mode := "real"
+	modeDescription := "Using in-memory orderbook engine (standalone mode)"
+	if s.mockMode {
+		mode = "mock"
+		modeDescription = "Using mock data for development/testing"
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now().Unix(),
-		"mock_mode": s.mockMode,
+		"status":           "healthy",
+		"timestamp":        time.Now().Unix(),
+		"mode":             mode,
+		"mode_description": modeDescription,
+		"mock_mode":        s.mockMode, // Deprecated: use "mode" instead
+		"warning":          "This API uses in-memory storage. For production, connect to a running Cosmos chain.",
 	})
 }
 

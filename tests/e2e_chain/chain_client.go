@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -26,15 +28,72 @@ type ChainConfig struct {
 
 // DefaultChainConfig returns the default configuration for local testing
 func DefaultChainConfig() *ChainConfig {
+	// Find project root by looking for go.mod
+	binaryPath := findBinaryPath()
+	homeDir := findHomeDir()
+
 	return &ChainConfig{
 		RPCURL:         "http://localhost:26657",
 		APIURL:         "http://localhost:1317",
 		GRPCAddr:       "localhost:9090",
-		ChainID:        "perpdex-test-1",
-		HomeDir:        ".perpdex-test",
-		BinaryPath:     "./build/perpdexd",
+		ChainID:        "perpdex-1", // Match the running chain
+		HomeDir:        homeDir,
+		BinaryPath:     binaryPath,
 		KeyringBackend: "test",
 	}
+}
+
+// findHomeDir finds the chain home directory (returns absolute path)
+func findHomeDir() string {
+	// Try absolute path first (most reliable)
+	absPath := "/Users/vvedition/Desktop/dex mvp/perp-dex_副本/.perpdex-test"
+	if _, err := os.Stat(absPath + "/keyring-test"); err == nil {
+		return absPath
+	}
+
+	// Fall back to relative paths
+	relativePaths := []string{
+		".perpdex-test",
+		"../.perpdex-test",
+		"../../.perpdex-test",
+	}
+
+	for _, p := range relativePaths {
+		keyringPath := p + "/keyring-test"
+		if _, err := os.Stat(keyringPath); err == nil {
+			// Convert to absolute path for reliability
+			if abs, err := filepath.Abs(p); err == nil {
+				return abs
+			}
+			return p
+		}
+	}
+
+	return ".perpdex-test"
+}
+
+// findBinaryPath searches for the perpdexd binary
+func findBinaryPath() string {
+	// Try common locations
+	paths := []string{
+		"./build/perpdexd",
+		"../build/perpdexd",
+		"../../build/perpdexd",
+		"/Users/vvedition/Desktop/dex mvp/perp-dex_副本/build/perpdexd",
+	}
+
+	for _, p := range paths {
+		if _, err := exec.LookPath(p); err == nil {
+			return p
+		}
+		// Also check if file exists
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	// Default fallback
+	return "./build/perpdexd"
 }
 
 // ChainClient provides methods for interacting with the chain
@@ -99,72 +158,113 @@ type OrderResult struct {
 	Error     string
 }
 
-// PlaceOrder places an order on the chain via CLI
+// sequenceTracker tracks account sequences for offline signing
+var sequenceTracker = make(map[string]uint64)
+
+// PlaceOrder places an order on the chain via CLI using offline signing
 func (c *ChainClient) PlaceOrder(ctx context.Context, trader, market, side, orderType, price, quantity string) (*OrderResult, error) {
 	start := time.Now()
+	result := &OrderResult{}
 
-	// Build the transaction command
-	args := []string{
+	// Get or initialize sequence for this trader
+	seq := sequenceTracker[trader]
+
+	// Step 1: Generate unsigned transaction
+	genArgs := []string{
 		"tx", "orderbook", "place-order",
-		market,
-		side,
-		orderType,
-		price,
-		quantity,
+		market, side, orderType, price, quantity,
 		"--from", trader,
 		"--home", c.config.HomeDir,
 		"--chain-id", c.config.ChainID,
 		"--keyring-backend", c.config.KeyringBackend,
-		"--gas", "auto",
-		"--gas-adjustment", "1.5",
+		"--gas", "200000",
 		"--fees", "1000usdc",
+		"--generate-only",
+	}
+
+	genCmd := exec.CommandContext(ctx, c.config.BinaryPath, genArgs...)
+	var genStdout, genStderr bytes.Buffer
+	genCmd.Stdout = &genStdout
+	genCmd.Stderr = &genStderr
+	err := genCmd.Run()
+	if err != nil {
+		result.Error = fmt.Sprintf("generate tx failed: %v - stderr: %s", err, genStderr.String())
+		result.Latency = time.Since(start)
+		return result, nil
+	}
+	unsignedTx := genStdout.Bytes()
+
+	// Write unsigned tx to temp file
+	tmpFile := fmt.Sprintf("/tmp/unsigned_tx_%s_%d.json", trader, time.Now().UnixNano())
+	if err := os.WriteFile(tmpFile, unsignedTx, 0644); err != nil {
+		result.Error = fmt.Sprintf("write unsigned tx failed: %v", err)
+		result.Latency = time.Since(start)
+		return result, nil
+	}
+	defer os.Remove(tmpFile)
+
+	// Step 2: Sign transaction offline
+	signedFile := tmpFile + ".signed"
+	signArgs := []string{
+		"tx", "sign", tmpFile,
+		"--from", trader,
+		"--home", c.config.HomeDir,
+		"--chain-id", c.config.ChainID,
+		"--keyring-backend", c.config.KeyringBackend,
+		"--account-number", "0",
+		"--sequence", fmt.Sprintf("%d", seq),
+		"--offline",
+		"--output-document", signedFile,
+	}
+
+	signCmd := exec.CommandContext(ctx, c.config.BinaryPath, signArgs...)
+	var signStderr bytes.Buffer
+	signCmd.Stderr = &signStderr
+	if err := signCmd.Run(); err != nil {
+		result.Error = fmt.Sprintf("sign tx failed: %v - %s", err, signStderr.String())
+		result.Latency = time.Since(start)
+		return result, nil
+	}
+	defer os.Remove(signedFile)
+
+	// Step 3: Broadcast signed transaction
+	broadcastArgs := []string{
+		"tx", "broadcast", signedFile,
+		"--home", c.config.HomeDir,
 		"--broadcast-mode", "sync",
-		"-y",
 		"--output", "json",
 	}
 
-	result := &OrderResult{
-		Latency: time.Since(start),
-	}
-
-	cmd := exec.CommandContext(ctx, c.config.BinaryPath, args...)
+	broadcastCmd := exec.CommandContext(ctx, c.config.BinaryPath, broadcastArgs...)
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	broadcastCmd.Stdout = &stdout
+	broadcastCmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err = broadcastCmd.Run()
 	result.Latency = time.Since(start)
 
 	if err != nil {
-		// Check if it's a known error that we should handle
 		errOutput := stderr.String()
-		if strings.Contains(errOutput, "sequence mismatch") {
-			// Retry with updated sequence
-			result.Error = "sequence mismatch"
+		if strings.Contains(errOutput, "sequence mismatch") || strings.Contains(errOutput, "account sequence mismatch") {
+			// Reset sequence and retry
+			sequenceTracker[trader] = 0
+			result.Error = "sequence mismatch - will retry"
 			return result, nil
 		}
 		result.Error = errOutput
-		return result, fmt.Errorf("command failed: %w - %s", err, errOutput)
+		return result, nil
 	}
 
-	// Parse the output to get tx hash and result
+	// Parse the output
 	output := stdout.String()
 	var txResp struct {
 		TxHash string `json:"txhash"`
 		Code   int    `json:"code"`
 		RawLog string `json:"raw_log"`
-		GasUsed string `json:"gas_used"`
 	}
 
 	if err := json.Unmarshal([]byte(output), &txResp); err != nil {
-		// Try to extract txhash from non-JSON output
-		if strings.Contains(output, "txhash:") {
-			parts := strings.Split(output, "txhash:")
-			if len(parts) > 1 {
-				result.TxHash = strings.TrimSpace(strings.Split(parts[1], "\n")[0])
-				result.Success = true
-			}
-		}
+		result.Error = fmt.Sprintf("parse response failed: %v", err)
 		return result, nil
 	}
 
@@ -172,9 +272,9 @@ func (c *ChainClient) PlaceOrder(ctx context.Context, trader, market, side, orde
 	result.Success = txResp.Code == 0
 	result.Error = txResp.RawLog
 
-	// Parse gas used
-	if txResp.GasUsed != "" {
-		fmt.Sscanf(txResp.GasUsed, "%d", &result.GasUsed)
+	// Increment sequence for next transaction
+	if txResp.Code == 0 {
+		sequenceTracker[trader] = seq + 1
 	}
 
 	return result, nil
