@@ -41,12 +41,13 @@ type Market struct {
 
 // Keeper manages the orderbook state
 type Keeper struct {
-	cdc             codec.BinaryCodec
-	storeKey        storetypes.StoreKey
-	perpetualKeeper PerpetualKeeper
-	logger          log.Logger
-	parallelConfig  ParallelConfig
-	parallelMatcher *ParallelMatcher
+	cdc               codec.BinaryCodec
+	storeKey          storetypes.StoreKey
+	perpetualKeeper   PerpetualKeeper
+	logger            log.Logger
+	parallelConfig    ParallelConfig
+	parallelMatcher   *ParallelMatcher
+	parallelMatcherV2 *ParallelMatcherV2
 }
 
 // NewKeeper creates a new orderbook keeper
@@ -64,6 +65,7 @@ func NewKeeper(
 		parallelConfig:  DefaultParallelConfig(),
 	}
 	k.parallelMatcher = NewParallelMatcher(k, k.parallelConfig)
+	k.parallelMatcherV2 = NewParallelMatcherV2(k, k.parallelConfig)
 	return k
 }
 
@@ -83,6 +85,7 @@ func NewKeeperWithConfig(
 		parallelConfig:  parallelConfig,
 	}
 	k.parallelMatcher = NewParallelMatcher(k, parallelConfig)
+	k.parallelMatcherV2 = NewParallelMatcherV2(k, parallelConfig)
 	return k
 }
 
@@ -298,6 +301,7 @@ func (k *Keeper) GetParallelConfig() ParallelConfig {
 func (k *Keeper) SetParallelConfig(config ParallelConfig) {
 	k.parallelConfig = config
 	k.parallelMatcher = NewParallelMatcher(k, config)
+	k.parallelMatcherV2 = NewParallelMatcherV2(k, config)
 }
 
 // IsParallelEnabled returns whether parallel matching is enabled
@@ -396,6 +400,69 @@ func (k *Keeper) ParallelEndBlocker(ctx sdk.Context) error {
 	}
 
 	return nil
+}
+
+// ParallelEndBlockerV2 processes pending orders using the V2 parallel matcher.
+func (k *Keeper) ParallelEndBlockerV2(ctx sdk.Context) (*AggregatedMatchResultV2, error) {
+	logger := k.Logger()
+
+	pendingOrders := k.GetAllPendingOrders(ctx)
+	if len(pendingOrders) == 0 {
+		return &AggregatedMatchResultV2{
+			Results:  make([]*ParallelMatchResultV2, 0),
+			Errors:   make([]error, 0),
+			Duration: 0,
+		}, nil
+	}
+
+	logger.Info("starting parallel end block matching v2",
+		"pending_orders", len(pendingOrders),
+		"workers", k.parallelConfig.Workers,
+	)
+
+	result, err := k.parallelMatcherV2.MatchParallel(ctx, pendingOrders)
+	if err != nil {
+		logger.Error("parallel matching v2 failed", "error", err)
+		if result == nil {
+			result = &AggregatedMatchResultV2{
+				Results: make([]*ParallelMatchResultV2, 0),
+				Errors:  []error{err},
+			}
+		} else {
+			result.Errors = append(result.Errors, err)
+		}
+		return result, fmt.Errorf("parallel matching v2 failed: %w", err)
+	}
+
+	for _, marketResult := range result.Results {
+		if marketResult == nil {
+			continue
+		}
+		if marketResult.Error != nil {
+			logger.Error("parallel matching v2 market failed",
+				"market_id", marketResult.MarketID,
+				"error", marketResult.Error,
+			)
+			continue
+		}
+		if marketResult.Commit != nil {
+			marketResult.Commit()
+		}
+	}
+
+	if len(result.Errors) > 0 {
+		for _, e := range result.Errors {
+			logger.Error("parallel matching v2 error", "error", e)
+		}
+	}
+
+	logger.Info("parallel matching v2 completed",
+		"total_trades", result.TotalTrades,
+		"duration", result.Duration.String(),
+		"errors", len(result.Errors),
+	)
+
+	return result, nil
 }
 
 // SequentialEndBlocker processes pending orders sequentially (fallback)

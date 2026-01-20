@@ -11,11 +11,11 @@ import (
 
 // OrderBookCache caches order books and orders in memory
 type OrderBookCache struct {
-	orderBooks map[string]*OrderBookV2   // marketID -> OrderBookV2
-	orders     map[string]*types.Order   // orderID -> Order
-	dirtyOBs   map[string]bool           // dirty order books
-	dirtyOrds  map[string]bool           // dirty orders
-	newTrades  []*types.Trade            // new trades to persist
+	orderBooks map[string]*OrderBookV2 // marketID -> OrderBookV2
+	orders     map[string]*types.Order // orderID -> Order
+	dirtyOBs   map[string]bool         // dirty order books
+	dirtyOrds  map[string]bool         // dirty orders
+	newTrades  []*types.Trade          // new trades to persist
 	mu         sync.RWMutex
 }
 
@@ -176,10 +176,11 @@ func NewMatchingEngineV2WithCache(keeper *Keeper, cache *OrderBookCache) *Matchi
 
 // MatchResultV2 contains the result of order matching
 type MatchResultV2 struct {
-	Trades       []*types.Trade
-	FilledQty    math.LegacyDec
-	AvgPrice     math.LegacyDec
-	RemainingQty math.LegacyDec
+	Trades               []*types.Trade
+	TradesWithSettlement []*types.TradeWithSettlement
+	FilledQty            math.LegacyDec
+	AvgPrice             math.LegacyDec
+	RemainingQty         math.LegacyDec
 }
 
 // ToMatchResult converts to standard MatchResult
@@ -197,10 +198,11 @@ func (me *MatchingEngineV2) Match(ctx sdk.Context, order *types.Order) (*MatchRe
 	orderBook := me.cache.GetOrderBook(ctx, me.keeper, order.MarketID)
 
 	result := &MatchResultV2{
-		Trades:       make([]*types.Trade, 0),
-		FilledQty:    math.LegacyZeroDec(),
-		AvgPrice:     math.LegacyZeroDec(),
-		RemainingQty: order.RemainingQty(),
+		Trades:               make([]*types.Trade, 0),
+		TradesWithSettlement: make([]*types.TradeWithSettlement, 0),
+		FilledQty:            math.LegacyZeroDec(),
+		AvgPrice:             math.LegacyZeroDec(),
+		RemainingQty:         order.RemainingQty(),
 	}
 
 	// Track total value for average price calculation
@@ -254,6 +256,7 @@ func (me *MatchingEngineV2) Match(ctx sdk.Context, order *types.Order) (*MatchRe
 			tradeID := me.keeper.generateTradeID(ctx)
 			trade := types.NewTrade(tradeID, order.MarketID, order, makerOrder, matchPrice, matchQty, takerFee, makerFee)
 			result.Trades = append(result.Trades, trade)
+			result.TradesWithSettlement = append(result.TradesWithSettlement, types.NewTradeWithSettlement(trade))
 			me.cache.AddTrade(trade)
 
 			// Update quantities

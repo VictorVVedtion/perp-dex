@@ -220,10 +220,14 @@ func (k *Keeper) GetAccount(ctx sdk.Context, trader string) *types.Account {
 }
 
 // GetOrCreateAccount gets an existing account or creates a new one
+// New accounts get an initial balance for testing purposes
 func (k *Keeper) GetOrCreateAccount(ctx sdk.Context, trader string) *types.Account {
 	account := k.GetAccount(ctx, trader)
 	if account == nil {
 		account = types.NewAccount(trader)
+		// Give new accounts initial balance for testing (1000 USDC)
+		// In production, this should be removed and users must deposit
+		account.Deposit(math.LegacyNewDec(10000)) // 10,000 USDC for testing
 		k.SetAccount(ctx, account)
 	}
 	return account

@@ -146,7 +146,8 @@ func (k *Keeper) CalculateCrossMargin(ctx sdk.Context, trader string) *types.Cro
 
 // CheckMarginRequirement checks if a trader has sufficient margin for a new position
 func (k *Keeper) CheckMarginRequirement(ctx sdk.Context, trader, marketID string, side types.PositionSide, quantity, price math.LegacyDec) error {
-	account := k.GetAccount(ctx, trader)
+	// Use GetOrCreateAccount to auto-create account on first trade
+	account := k.GetOrCreateAccount(ctx, trader)
 	if account == nil {
 		return types.ErrAccountNotFound
 	}
@@ -293,17 +294,17 @@ func (k *Keeper) checkCrossMarginLiquidation(ctx sdk.Context, trader string) (bo
 
 // GetMarginSummary returns a summary of margin status for a trader
 type MarginSummary struct {
-	Trader              string
-	Mode                types.MarginMode
-	TotalBalance        math.LegacyDec
-	TotalLockedMargin   math.LegacyDec
-	TotalUnrealizedPnL  math.LegacyDec
-	TotalEquity         math.LegacyDec
-	AvailableMargin     math.LegacyDec
-	MarginRatio         math.LegacyDec
-	IsHealthy           bool
-	PositionCount       int
-	IsolatedPositions   []*IsolatedPositionSummary
+	Trader             string
+	Mode               types.MarginMode
+	TotalBalance       math.LegacyDec
+	TotalLockedMargin  math.LegacyDec
+	TotalUnrealizedPnL math.LegacyDec
+	TotalEquity        math.LegacyDec
+	AvailableMargin    math.LegacyDec
+	MarginRatio        math.LegacyDec
+	IsHealthy          bool
+	PositionCount      int
+	IsolatedPositions  []*IsolatedPositionSummary
 }
 
 type IsolatedPositionSummary struct {

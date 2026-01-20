@@ -59,7 +59,7 @@ func DefaultPerformanceConfig() PerformanceConfig {
 	return PerformanceConfig{
 		Parallel: ParallelConfig{
 			Enabled:   true,
-			Workers:   16, // Increased from 4 for 2000 TPS target
+			Workers:   16,  // Increased from 4 for 2000 TPS target
 			BatchSize: 500, // Increased from 100
 			Timeout:   10 * time.Second,
 		},
@@ -110,11 +110,11 @@ func HighTPSConfig() PerformanceConfig {
 
 // ObjectPools provides memory pools for frequently allocated objects
 type ObjectPools struct {
-	orders     *sync.Pool
-	trades     *sync.Pool
-	results    *sync.Pool
+	orders      *sync.Pool
+	trades      *sync.Pool
+	results     *sync.Pool
 	priceLevels *sync.Pool
-	decPools   *sync.Pool
+	decPools    *sync.Pool
 }
 
 // GlobalPools is the singleton instance of object pools
@@ -136,7 +136,8 @@ func NewObjectPools() *ObjectPools {
 		results: &sync.Pool{
 			New: func() interface{} {
 				return &MatchResultV2{
-					Trades: make([]*types.Trade, 0, 16),
+					Trades:               make([]*types.Trade, 0, 16),
+					TradesWithSettlement: make([]*types.TradeWithSettlement, 0, 16),
 				}
 			},
 		},
@@ -188,6 +189,7 @@ func (p *ObjectPools) PutTrade(t *types.Trade) {
 func (p *ObjectPools) GetMatchResult() *MatchResultV2 {
 	r := p.results.Get().(*MatchResultV2)
 	r.Trades = r.Trades[:0]
+	r.TradesWithSettlement = r.TradesWithSettlement[:0]
 	r.FilledQty = math.LegacyZeroDec()
 	r.AvgPrice = math.LegacyZeroDec()
 	r.RemainingQty = math.LegacyZeroDec()
@@ -201,6 +203,7 @@ func (p *ObjectPools) PutMatchResult(r *MatchResultV2) {
 	}
 	// Clear trades slice but keep capacity
 	r.Trades = r.Trades[:0]
+	r.TradesWithSettlement = r.TradesWithSettlement[:0]
 	p.results.Put(r)
 }
 
@@ -260,23 +263,23 @@ type PerformanceMetrics struct {
 	mu sync.RWMutex
 
 	// Order metrics
-	TotalOrders   uint64
-	MatchedOrders uint64
+	TotalOrders     uint64
+	MatchedOrders   uint64
 	CancelledOrders uint64
 
 	// Trade metrics
-	TotalTrades   uint64
-	TotalVolume   math.LegacyDec
+	TotalTrades uint64
+	TotalVolume math.LegacyDec
 
 	// Latency metrics
-	TotalLatencyNs  int64
-	OrderCount      int64
-	MinLatencyNs    int64
-	MaxLatencyNs    int64
+	TotalLatencyNs int64
+	OrderCount     int64
+	MinLatencyNs   int64
+	MaxLatencyNs   int64
 
 	// Throughput metrics
-	LastSecondOrders  uint64
-	PeakOrdersPerSec  uint64
+	LastSecondOrders uint64
+	PeakOrdersPerSec uint64
 
 	// Memory metrics
 	PoolHits   uint64
@@ -338,15 +341,15 @@ func (m *PerformanceMetrics) GetStats() map[string]interface{} {
 	defer m.mu.RUnlock()
 
 	return map[string]interface{}{
-		"total_orders":      m.TotalOrders,
-		"matched_orders":    m.MatchedOrders,
-		"cancelled_orders":  m.CancelledOrders,
-		"total_trades":      m.TotalTrades,
-		"total_volume":      m.TotalVolume.String(),
-		"avg_latency_ns":    m.GetAverageLatency(),
-		"min_latency_ns":    m.MinLatencyNs,
-		"max_latency_ns":    m.MaxLatencyNs,
-		"peak_orders_sec":   m.PeakOrdersPerSec,
+		"total_orders":     m.TotalOrders,
+		"matched_orders":   m.MatchedOrders,
+		"cancelled_orders": m.CancelledOrders,
+		"total_trades":     m.TotalTrades,
+		"total_volume":     m.TotalVolume.String(),
+		"avg_latency_ns":   m.GetAverageLatency(),
+		"min_latency_ns":   m.MinLatencyNs,
+		"max_latency_ns":   m.MaxLatencyNs,
+		"peak_orders_sec":  m.PeakOrdersPerSec,
 	}
 }
 

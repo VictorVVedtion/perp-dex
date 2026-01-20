@@ -10,6 +10,7 @@ import (
 
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/log"
+	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
@@ -272,9 +273,19 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 	// Phase 2: Order Matching (Optimized)
 	// ===========================================
 	matchingStart := time.Now()
-	matchingEngine := orderbookkeeper.NewMatchingEngine(app.OrderbookKeeper)
-	matchingStats := matchingEngine.ProcessPendingOrders(ctx)
+	matchingResult, matchErr := app.OrderbookKeeper.ParallelEndBlockerV2(ctx)
+	if matchErr != nil {
+		logger.Error("parallel matching v2 failed", "error", matchErr)
+	}
 	matchingDuration = time.Since(matchingStart)
+
+	settlementRequest := convertToSettlementRequest(matchingResult)
+	if settlementRequest != nil && len(settlementRequest.Trades) > 0 {
+		settlementEngine := clearinghousekeeper.NewSettlementEngine(app.ClearinghouseKeeper)
+		if _, err := settlementEngine.Settle(ctx, settlementRequest); err != nil {
+			logger.Error("settlement failed", "error", err)
+		}
+	}
 
 	// ===========================================
 	// Phase 3: Liquidation Processing
@@ -314,14 +325,30 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 		"conditional_ms", conditionalDuration.Milliseconds(),
 	)
 
-	// Log matching statistics if any orders were processed
-	if matchingStats.OrdersProcessed > 0 {
+	// Log matching statistics if any markets were processed
+	if matchingResult != nil && len(matchingResult.Results) > 0 {
+		totalVolume := math.LegacyZeroDec()
+		marketsProcessed := 0
+		for _, marketResult := range matchingResult.Results {
+			if marketResult == nil {
+				continue
+			}
+			marketsProcessed++
+			for _, trade := range marketResult.Trades {
+				if trade == nil {
+					continue
+				}
+				totalVolume = totalVolume.Add(trade.Quantity.Mul(trade.Price))
+			}
+		}
+
 		logger.Info("Matching engine stats",
 			"block", blockHeight,
-			"orders_processed", matchingStats.OrdersProcessed,
-			"trades_executed", matchingStats.TradesExecuted,
-			"volume", matchingStats.TotalVolume.String(),
-			"avg_latency_us", matchingStats.AvgLatencyMicros,
+			"markets_processed", marketsProcessed,
+			"trades_executed", matchingResult.TotalTrades,
+			"volume", totalVolume.String(),
+			"errors", len(matchingResult.Errors),
+			"duration_ms", matchingResult.Duration.Milliseconds(),
 		)
 	}
 
@@ -344,6 +371,25 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 	}
 
 	return sdk.EndBlock{}, nil
+}
+
+func convertToSettlementRequest(result *orderbookkeeper.AggregatedMatchResultV2) *orderbooktypes.SettlementRequest {
+	if result == nil || result.TotalTrades == 0 {
+		return nil
+	}
+
+	trades := make([]*orderbooktypes.TradeWithSettlement, 0, result.TotalTrades)
+	for _, marketResult := range result.Results {
+		if marketResult == nil || marketResult.Error != nil {
+			continue
+		}
+		trades = append(trades, marketResult.Trades...)
+	}
+	if len(trades) == 0 {
+		return nil
+	}
+
+	return orderbooktypes.NewSettlementRequest(trades)
 }
 
 // StakingGenesisState represents the staking module's genesis state

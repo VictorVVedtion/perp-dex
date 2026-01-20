@@ -115,11 +115,11 @@ const (
 
 // Proto-compatible aliases for OrderStatus enum
 const (
-	OrderStatus_ORDER_STATUS_UNSPECIFIED       = OrderStatusUnspecified
-	OrderStatus_ORDER_STATUS_OPEN              = OrderStatusOpen
-	OrderStatus_ORDER_STATUS_FILLED            = OrderStatusFilled
-	OrderStatus_ORDER_STATUS_PARTIALLY_FILLED  = OrderStatusPartiallyFilled
-	OrderStatus_ORDER_STATUS_CANCELLED         = OrderStatusCancelled
+	OrderStatus_ORDER_STATUS_UNSPECIFIED      = OrderStatusUnspecified
+	OrderStatus_ORDER_STATUS_OPEN             = OrderStatusOpen
+	OrderStatus_ORDER_STATUS_FILLED           = OrderStatusFilled
+	OrderStatus_ORDER_STATUS_PARTIALLY_FILLED = OrderStatusPartiallyFilled
+	OrderStatus_ORDER_STATUS_CANCELLED        = OrderStatusCancelled
 )
 
 // Proto-compatible maps for OrderStatus enum
@@ -378,6 +378,38 @@ type Trade struct {
 	Timestamp    time.Time
 }
 
+// TradeWithSettlement contains trade data plus settlement fields.
+type TradeWithSettlement struct {
+	TradeID      string
+	MarketID     string
+	TakerOrderID string
+	MakerOrderID string
+	Taker        string
+	Maker        string
+	TakerSide    Side
+	Price        math.LegacyDec
+	Quantity     math.LegacyDec
+	TakerFee     math.LegacyDec
+	MakerFee     math.LegacyDec
+	Timestamp    time.Time
+
+	// Settlement fields (per-side)
+	TakerRealizedPnL  math.LegacyDec
+	MakerRealizedPnL  math.LegacyDec
+	TakerMarginChange math.LegacyDec
+	MakerMarginChange math.LegacyDec
+}
+
+// SettlementRequest bundles trades for settlement processing.
+type SettlementRequest struct {
+	Trades []*TradeWithSettlement
+}
+
+// NewSettlementRequest creates a settlement request from trades.
+func NewSettlementRequest(trades []*TradeWithSettlement) *SettlementRequest {
+	return &SettlementRequest{Trades: trades}
+}
+
 // NewTrade creates a new trade
 func NewTrade(tradeID, marketID string, takerOrder, makerOrder *Order, price, qty, takerFee, makerFee math.LegacyDec) *Trade {
 	return &Trade{
@@ -393,5 +425,30 @@ func NewTrade(tradeID, marketID string, takerOrder, makerOrder *Order, price, qt
 		TakerFee:     takerFee,
 		MakerFee:     makerFee,
 		Timestamp:    time.Now(),
+	}
+}
+
+// NewTradeWithSettlement creates a settlement-ready trade from a trade.
+func NewTradeWithSettlement(trade *Trade) *TradeWithSettlement {
+	if trade == nil {
+		return nil
+	}
+	return &TradeWithSettlement{
+		TradeID:           trade.TradeID,
+		MarketID:          trade.MarketID,
+		TakerOrderID:      trade.TakerOrderID,
+		MakerOrderID:      trade.MakerOrderID,
+		Taker:             trade.Taker,
+		Maker:             trade.Maker,
+		TakerSide:         trade.TakerSide,
+		Price:             trade.Price,
+		Quantity:          trade.Quantity,
+		TakerFee:          trade.TakerFee,
+		MakerFee:          trade.MakerFee,
+		Timestamp:         trade.Timestamp,
+		TakerRealizedPnL:  math.LegacyZeroDec(),
+		MakerRealizedPnL:  math.LegacyZeroDec(),
+		TakerMarginChange: math.LegacyZeroDec(),
+		MakerMarginChange: math.LegacyZeroDec(),
 	}
 }
