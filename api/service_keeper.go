@@ -24,12 +24,16 @@ import (
 )
 
 // KeeperService implements OrderService, PositionService, AccountService
-// by connecting to a real Keeper instance
+// by connecting to a real Keeper instance with BTree-based orderbook
 type KeeperService struct {
 	keeper   *keeper.Keeper
 	ctx      sdk.Context
 	mu       sync.RWMutex
 	orderSeq atomic.Uint64
+
+	// BTree-based orderbooks for O(log n) matching
+	orderBooks map[string]*keeper.OrderBookBTree
+	orders     map[string]*orderbooktypes.Order // Order storage by ID
 
 	// In-memory account balances for testing
 	accounts map[string]*types.Account
@@ -98,9 +102,11 @@ func NewKeeperService() *KeeperService {
 	)
 
 	return &KeeperService{
-		keeper:   k,
-		ctx:      ctx,
-		accounts: make(map[string]*types.Account),
+		keeper:     k,
+		ctx:        ctx,
+		orderBooks: make(map[string]*keeper.OrderBookBTree),
+		orders:     make(map[string]*orderbooktypes.Order),
+		accounts:   make(map[string]*types.Account),
 	}
 }
 
@@ -144,11 +150,29 @@ func (s *KeeperService) PlaceOrder(ctx context.Context, req *types.PlaceOrderReq
 		return nil, fmt.Errorf("invalid quantity: %v", err)
 	}
 
-	// Place order through keeper
-	order, matchResult, err := s.keeper.PlaceOrder(s.ctx, req.Trader, req.MarketID, side, orderType, price, quantity)
-	if err != nil {
-		return nil, fmt.Errorf("failed to place order: %v", err)
+	// Generate order ID
+	orderID := fmt.Sprintf("order-%d", s.orderSeq.Add(1))
+
+	// Create order
+	order := orderbooktypes.NewOrder(orderID, req.Trader, req.MarketID, side, orderType, price, quantity)
+
+	// Get or create BTree orderbook for this market
+	ob, exists := s.orderBooks[req.MarketID]
+	if !exists {
+		ob = keeper.NewOrderBookBTree(req.MarketID)
+		s.orderBooks[req.MarketID] = ob
 	}
+
+	// Match order using BTree
+	matchResult := s.matchOrderBTree(ob, order)
+
+	// If remaining quantity and limit order, add to book
+	if order.RemainingQty().IsPositive() && orderType == orderbooktypes.OrderTypeLimit {
+		ob.AddOrder(order)
+	}
+
+	// Store order
+	s.orders[order.OrderID] = order
 
 	// Convert to API response
 	apiOrder := &types.Order{
@@ -167,7 +191,7 @@ func (s *KeeperService) PlaceOrder(ctx context.Context, req *types.PlaceOrderReq
 
 	// Convert match result
 	var apiMatch *types.MatchResult
-	if matchResult != nil {
+	if matchResult != nil && matchResult.FilledQty.IsPositive() {
 		trades := make([]types.TradeInfo, 0, len(matchResult.Trades))
 		for _, t := range matchResult.Trades {
 			trades = append(trades, types.TradeInfo{
@@ -195,10 +219,28 @@ func (s *KeeperService) CancelOrder(ctx context.Context, trader, orderID string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	order, err := s.keeper.CancelOrder(s.ctx, trader, orderID)
-	if err != nil {
-		return nil, err
+	// Get order from local storage
+	order, exists := s.orders[orderID]
+	if !exists {
+		return nil, fmt.Errorf("order not found: %s", orderID)
 	}
+
+	if order.Trader != trader {
+		return nil, fmt.Errorf("unauthorized: order belongs to different trader")
+	}
+
+	if !order.IsActive() {
+		return nil, fmt.Errorf("order is not active: %s", orderID)
+	}
+
+	// Remove from BTree orderbook
+	ob, exists := s.orderBooks[order.MarketID]
+	if exists {
+		ob.RemoveOrder(order)
+	}
+
+	// Cancel the order
+	order.Cancel()
 
 	return &types.CancelOrderResponse{
 		Order: &types.Order{
@@ -259,8 +301,8 @@ func (s *KeeperService) GetOrder(ctx context.Context, orderID string) (*types.Or
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	order := s.keeper.GetOrder(s.ctx, orderID)
-	if order == nil {
+	order, exists := s.orders[orderID]
+	if !exists {
 		return nil, fmt.Errorf("order not found: %s", orderID)
 	}
 
@@ -283,10 +325,12 @@ func (s *KeeperService) ListOrders(ctx context.Context, req *types.ListOrdersReq
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	orders := s.keeper.GetOrdersByTrader(s.ctx, req.Trader)
-
-	apiOrders := make([]*types.Order, 0, len(orders))
-	for _, order := range orders {
+	apiOrders := make([]*types.Order, 0)
+	for _, order := range s.orders {
+		// Filter by trader
+		if order.Trader != req.Trader {
+			continue
+		}
 		// Filter by market if specified
 		if req.MarketID != "" && order.MarketID != req.MarketID {
 			continue
@@ -375,6 +419,120 @@ func (s *KeeperService) Withdraw(ctx context.Context, req *types.WithdrawRequest
 }
 
 // ============================================================================
+// BTree Matching Engine
+// ============================================================================
+
+// btreeMatchResult contains the result of BTree order matching
+type btreeMatchResult struct {
+	Trades       []*orderbooktypes.Trade
+	FilledQty    math.LegacyDec
+	AvgPrice     math.LegacyDec
+	RemainingQty math.LegacyDec
+}
+
+var tradeSeq atomic.Uint64
+
+// matchOrderBTree performs order matching using BTree orderbook
+func (s *KeeperService) matchOrderBTree(ob *keeper.OrderBookBTree, order *orderbooktypes.Order) *btreeMatchResult {
+	result := &btreeMatchResult{
+		Trades:       make([]*orderbooktypes.Trade, 0),
+		FilledQty:    math.LegacyZeroDec(),
+		AvgPrice:     math.LegacyZeroDec(),
+		RemainingQty: order.RemainingQty(),
+	}
+
+	totalValue := math.LegacyZeroDec()
+
+	// Match against opposite side
+	for result.RemainingQty.IsPositive() {
+		var bestLevel *keeper.PriceLevelV2
+		if order.Side == orderbooktypes.SideBuy {
+			bestLevel = ob.GetBestAsk()
+		} else {
+			bestLevel = ob.GetBestBid()
+		}
+
+		if bestLevel == nil {
+			break
+		}
+
+		// Check price compatibility for limit orders
+		if order.OrderType == orderbooktypes.OrderTypeLimit {
+			if order.Side == orderbooktypes.SideBuy && order.Price.LT(bestLevel.Price) {
+				break
+			}
+			if order.Side == orderbooktypes.SideSell && order.Price.GT(bestLevel.Price) {
+				break
+			}
+		}
+
+		// Match against orders at this level (FIFO)
+		for len(bestLevel.Orders) > 0 && result.RemainingQty.IsPositive() {
+			makerOrder := bestLevel.Orders[0]
+			if makerOrder == nil || !makerOrder.IsActive() {
+				bestLevel.Orders = bestLevel.Orders[1:]
+				continue
+			}
+
+			// Calculate match quantity
+			matchQty := math.LegacyMinDec(result.RemainingQty, makerOrder.RemainingQty())
+			matchPrice := bestLevel.Price
+
+			// Create trade
+			tradeID := fmt.Sprintf("trade-%d", tradeSeq.Add(1))
+			trade := &orderbooktypes.Trade{
+				TradeID:   tradeID,
+				MarketID:  order.MarketID,
+				Taker:     order.Trader,
+				Maker:     makerOrder.Trader,
+				TakerSide: order.Side,
+				Price:     matchPrice,
+				Quantity:  matchQty,
+				TakerFee:  math.LegacyZeroDec(),
+				MakerFee:  math.LegacyZeroDec(),
+				Timestamp: time.Now(),
+			}
+			result.Trades = append(result.Trades, trade)
+
+			// Update quantities
+			order.Fill(matchQty)
+			makerOrder.Fill(matchQty)
+
+			// Update tracking
+			result.FilledQty = result.FilledQty.Add(matchQty)
+			result.RemainingQty = result.RemainingQty.Sub(matchQty)
+			totalValue = totalValue.Add(matchQty.Mul(matchPrice))
+
+			// Update level quantity
+			bestLevel.Quantity = bestLevel.Quantity.Sub(matchQty)
+
+			// Remove filled maker order from level
+			if makerOrder.IsFilled() {
+				bestLevel.Orders = bestLevel.Orders[1:]
+				// Update stored order
+				s.orders[makerOrder.OrderID] = makerOrder
+			}
+		}
+
+		// Remove empty level
+		if bestLevel.IsEmpty() {
+			if order.Side == orderbooktypes.SideBuy {
+				ob.RemoveOrderByID("", orderbooktypes.SideSell, bestLevel.Price)
+			} else {
+				ob.RemoveOrderByID("", orderbooktypes.SideBuy, bestLevel.Price)
+			}
+		}
+	}
+
+	// Calculate average price
+	if result.FilledQty.IsPositive() {
+		result.AvgPrice = totalValue.Quo(result.FilledQty)
+	}
+
+	return result
+}
+
+// ============================================================================
 // Helper Methods
 // ============================================================================
 
@@ -388,36 +546,28 @@ func (s *KeeperService) GetContext() sdk.Context {
 	return s.ctx
 }
 
-// GetOrderBookDepth returns the order book depth for a market
+// GetOrderBookDepth returns the order book depth for a market using BTree
 func (s *KeeperService) GetOrderBookDepth(marketID string, depth int) (bids, asks [][]string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	ob := s.keeper.GetOrderBook(s.ctx, marketID)
-	if ob == nil {
+	ob, exists := s.orderBooks[marketID]
+	if !exists {
 		return [][]string{}, [][]string{}
 	}
 
-	// Get bids (limited by depth)
-	bidCount := len(ob.Bids)
-	if bidCount > depth {
-		bidCount = depth
-	}
-	bids = make([][]string, 0, bidCount)
-	for i := 0; i < bidCount; i++ {
-		pl := ob.Bids[i]
-		bids = append(bids, []string{pl.Price.String(), pl.Quantity.String()})
+	// Get bids using BTree iteration (highest to lowest)
+	bidLevels := ob.GetBidLevels(depth)
+	bids = make([][]string, 0, len(bidLevels))
+	for _, level := range bidLevels {
+		bids = append(bids, []string{level.Price.String(), level.Quantity.String()})
 	}
 
-	// Get asks (limited by depth)
-	askCount := len(ob.Asks)
-	if askCount > depth {
-		askCount = depth
-	}
-	asks = make([][]string, 0, askCount)
-	for i := 0; i < askCount; i++ {
-		pl := ob.Asks[i]
-		asks = append(asks, []string{pl.Price.String(), pl.Quantity.String()})
+	// Get asks using BTree iteration (lowest to highest)
+	askLevels := ob.GetAskLevels(depth)
+	asks = make([][]string, 0, len(askLevels))
+	for _, level := range askLevels {
+		asks = append(asks, []string{level.Price.String(), level.Quantity.String()})
 	}
 
 	return bids, asks
