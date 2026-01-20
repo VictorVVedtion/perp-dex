@@ -212,31 +212,77 @@ apply_fast_config() {
         return 0
     fi
 
-    print_info "Applying fast consensus configuration..."
+    local app_file="${CONFIG_DIR}/app.toml"
 
-    # Consensus timeouts
+    print_info "Applying ULTRA fast consensus configuration (2000 TPS target)..."
+
+    # ================================================================
+    # Layer 2.1: Aggressive Consensus Timeouts (500ms block time)
+    # ================================================================
+    print_info "  [2.1] Reducing block time to 500ms..."
     sed -i.bak 's/timeout_propose = "[^"]*"/timeout_propose = "500ms"/g' "$config_file"
     sed -i.bak 's/timeout_propose_delta = "[^"]*"/timeout_propose_delta = "100ms"/g' "$config_file"
-    sed -i.bak 's/timeout_prevote = "[^"]*"/timeout_prevote = "500ms"/g' "$config_file"
+    sed -i.bak 's/timeout_prevote = "[^"]*"/timeout_prevote = "200ms"/g' "$config_file"
     sed -i.bak 's/timeout_prevote_delta = "[^"]*"/timeout_prevote_delta = "100ms"/g' "$config_file"
-    sed -i.bak 's/timeout_precommit = "[^"]*"/timeout_precommit = "500ms"/g' "$config_file"
+    sed -i.bak 's/timeout_precommit = "[^"]*"/timeout_precommit = "200ms"/g' "$config_file"
     sed -i.bak 's/timeout_precommit_delta = "[^"]*"/timeout_precommit_delta = "100ms"/g' "$config_file"
     sed -i.bak 's/timeout_commit = "[^"]*"/timeout_commit = "500ms"/g' "$config_file"
 
-    # Mempool configuration
-    sed -i.bak 's/^size = [0-9]*/size = 10000/g' "$config_file"
-    sed -i.bak 's/max_tx_bytes = [0-9]*/max_tx_bytes = 10485760/g' "$config_file"
-    sed -i.bak 's/max_txs_bytes = [0-9]*/max_txs_bytes = 104857600/g' "$config_file"
+    # ================================================================
+    # Layer 2.2: Massive Mempool (50K transactions)
+    # ================================================================
+    print_info "  [2.2] Increasing mempool to 50,000 transactions..."
+    sed -i.bak 's/^size = [0-9]*/size = 50000/g' "$config_file"
+    sed -i.bak 's/max_tx_bytes = [0-9]*/max_tx_bytes = 1048576/g' "$config_file"
+    sed -i.bak 's/max_txs_bytes = [0-9]*/max_txs_bytes = 1073741824/g' "$config_file"
+    sed -i.bak 's/cache_size = [0-9]*/cache_size = 100000/g' "$config_file"
 
-    # P2P configuration
+    # ================================================================
+    # Layer 2.3: High-speed P2P
+    # ================================================================
+    print_info "  [2.3] Optimizing P2P for high throughput..."
     sed -i.bak 's/flush_throttle_timeout = "[^"]*"/flush_throttle_timeout = "10ms"/g' "$config_file"
-    sed -i.bak 's/send_rate = [0-9]*/send_rate = 20480000/g' "$config_file"
-    sed -i.bak 's/recv_rate = [0-9]*/recv_rate = 20480000/g' "$config_file"
+    sed -i.bak 's/send_rate = [0-9]*/send_rate = 51200000/g' "$config_file"
+    sed -i.bak 's/recv_rate = [0-9]*/recv_rate = 51200000/g' "$config_file"
+    sed -i.bak 's/max_num_inbound_peers = [0-9]*/max_num_inbound_peers = 100/g' "$config_file"
+    sed -i.bak 's/max_num_outbound_peers = [0-9]*/max_num_outbound_peers = 50/g' "$config_file"
+
+    # ================================================================
+    # Layer 2.4: IAVL & State Cache (5M nodes)
+    # ================================================================
+    if [[ -f "$app_file" ]]; then
+        print_info "  [2.4] Expanding IAVL cache to 5M nodes..."
+        sed -i.bak 's/iavl-cache-size = [0-9]*/iavl-cache-size = 5000000/g' "$app_file"
+
+        # Enable API & gRPC
+        print_info "  [2.5] Enabling API & gRPC..."
+        sed -i.bak 's/enable = false/enable = true/g' "$app_file"
+        sed -i.bak 's/swagger = false/swagger = true/g' "$app_file"
+
+        # Aggressive pruning for performance
+        print_info "  [2.6] Setting aggressive pruning..."
+        sed -i.bak 's/pruning = "[^"]*"/pruning = "custom"/g' "$app_file"
+        sed -i.bak 's/pruning-keep-recent = "[^"]*"/pruning-keep-recent = "100"/g' "$app_file"
+        sed -i.bak 's/pruning-interval = "[^"]*"/pruning-interval = "10"/g' "$app_file"
+
+        rm -f "${app_file}.bak"
+    fi
 
     # Clean up backup files created by sed
     rm -f "${config_file}.bak"
 
-    print_success "Fast consensus configuration applied!"
+    echo ""
+    print_success "ULTRA fast consensus configuration applied!"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────┐"
+    echo "  │ Configuration Summary (2000 TPS Target):               │"
+    echo "  ├─────────────────────────────────────────────────────────┤"
+    echo "  │ Block Time:     2s → 500ms         (4x faster)         │"
+    echo "  │ Mempool Size:   5K → 50K           (10x larger)        │"
+    echo "  │ IAVL Cache:     781K → 5M nodes    (6x larger)         │"
+    echo "  │ P2P Bandwidth:  20MB → 50MB/s      (2.5x faster)       │"
+    echo "  │ Pruning:        Aggressive for performance             │"
+    echo "  └─────────────────────────────────────────────────────────┘"
 }
 
 # Restart the node

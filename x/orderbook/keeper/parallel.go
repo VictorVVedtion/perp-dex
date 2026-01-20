@@ -25,12 +25,13 @@ type ParallelConfig struct {
 }
 
 // DefaultParallelConfig returns the default parallel matching configuration
+// Optimized for 2000+ TPS target (Hyperliquid alignment)
 func DefaultParallelConfig() ParallelConfig {
 	return ParallelConfig{
 		Enabled:   true,
-		Workers:   4,
-		BatchSize: 100,
-		Timeout:   5 * time.Second,
+		Workers:   16,   // 4x increase for high TPS
+		BatchSize: 500,  // 5x increase for batch efficiency
+		Timeout:   10 * time.Second,
 	}
 }
 

@@ -33,16 +33,17 @@ func TestParallelConfig(t *testing.T) {
 			t.Error("Expected parallel matching to be enabled by default")
 		}
 
-		if config.Workers != 4 {
-			t.Errorf("Expected 4 workers, got %d", config.Workers)
+		// High TPS optimized defaults (Hyperliquid alignment)
+		if config.Workers != 16 {
+			t.Errorf("Expected 16 workers (high TPS), got %d", config.Workers)
 		}
 
-		if config.BatchSize != 100 {
-			t.Errorf("Expected batch size 100, got %d", config.BatchSize)
+		if config.BatchSize != 500 {
+			t.Errorf("Expected batch size 500 (high TPS), got %d", config.BatchSize)
 		}
 
-		if config.Timeout != 5*time.Second {
-			t.Errorf("Expected 5s timeout, got %v", config.Timeout)
+		if config.Timeout != 10*time.Second {
+			t.Errorf("Expected 10s timeout (high TPS), got %v", config.Timeout)
 		}
 	})
 
