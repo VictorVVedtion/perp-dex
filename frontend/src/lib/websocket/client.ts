@@ -52,6 +52,7 @@ export class WSClient {
   private reconnectAttempts = 0;
   private maxReconnects = 10;
   private reconnectDelay = 1000;
+  private maxReconnectDelay = 30000; // CRITICAL FIX: Maximum 30 second delay cap
   private subscriptions = new Map<string, Set<MessageHandler>>();
   private pendingSubscriptions: string[] = [];
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -274,6 +275,7 @@ export class WSClient {
 
   /**
    * Schedule a reconnection attempt
+   * CRITICAL FIX: Added maximum delay cap to prevent excessive wait times
    */
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnects) {
@@ -281,7 +283,9 @@ export class WSClient {
       return;
     }
 
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+    // Calculate exponential backoff with cap
+    const exponentialDelay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+    const delay = Math.min(exponentialDelay, this.maxReconnectDelay); // Cap at maxReconnectDelay
     console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnects})`);
 
     setTimeout(() => {

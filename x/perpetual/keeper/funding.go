@@ -276,8 +276,39 @@ func (k *Keeper) SettleFunding(ctx sdk.Context, marketID string) error {
 			totalShortPayment = totalShortPayment.Add(payment)
 		}
 
-		// Update account balance
+		// Update account balance with negative balance protection
 		account := k.GetOrCreateAccount(ctx, pos.Trader)
+
+		// CRITICAL FIX: Prevent negative balance from funding payments
+		// If payment would cause negative balance, limit the payment
+		if payment.IsNegative() {
+			maxPayment := account.Balance.Neg() // Maximum negative payment (makes balance = 0)
+			if payment.LT(maxPayment) {
+				// Payment would exceed available balance
+				// This indicates position should potentially be flagged for liquidation
+				logger.Warn("funding payment limited due to insufficient balance",
+					"trader", pos.Trader,
+					"market_id", marketID,
+					"required_payment", payment.String(),
+					"limited_to", maxPayment.String(),
+					"balance", account.Balance.String(),
+				)
+
+				// Emit warning event
+				ctx.EventManager().EmitEvent(
+					sdk.NewEvent(
+						"funding_payment_limited",
+						sdk.NewAttribute("trader", pos.Trader),
+						sdk.NewAttribute("market_id", marketID),
+						sdk.NewAttribute("required", payment.Abs().String()),
+						sdk.NewAttribute("collected", account.Balance.String()),
+					),
+				)
+
+				payment = maxPayment
+			}
+		}
+
 		account.Balance = account.Balance.Add(payment)
 		account.UpdatedAt = ctx.BlockTime()
 		k.SetAccount(ctx, account)

@@ -269,6 +269,7 @@ func (k *Keeper) getSourcePrice(ctx sdk.Context, sourceID, marketID string) *Ora
 }
 
 // AggregatePrice aggregates prices from multiple sources using weighted median
+// CRITICAL FIX: Added time-based weight decay to prevent stale price manipulation
 func (k *Keeper) AggregatePrice(ctx sdk.Context, marketID string) (math.LegacyDec, error) {
 	config := k.GetOracleConfig(ctx)
 	sources := k.GetAllOracleSources(ctx)
@@ -287,18 +288,49 @@ func (k *Keeper) AggregatePrice(ctx sdk.Context, marketID string) (math.LegacyDe
 		}
 
 		// Check if price is stale
-		if now.Sub(priceData.Timestamp) > config.MaxPriceAge {
+		age := now.Sub(priceData.Timestamp)
+		if age > config.MaxPriceAge {
 			k.Logger().Debug("skipping stale price",
 				"source", source.SourceID,
-				"age", now.Sub(priceData.Timestamp).String(),
+				"age", age.String(),
 			)
 			continue
 		}
 
-		validPrices = append(validPrices, weightedPrice{
-			price:  priceData.Price,
-			weight: source.Weight,
-		})
+		// CRITICAL FIX: Apply time-based weight decay
+		// Newer prices get higher weight, older prices get lower weight
+		// Formula: adjustedWeight = sourceWeight * (1 - age/maxAge)^2
+		// Using quadratic decay for stronger recency preference
+		maxAgeSeconds := float64(config.MaxPriceAge.Seconds())
+		ageSeconds := float64(age.Seconds())
+		if maxAgeSeconds > 0 {
+			// Time decay factor: 1.0 for fresh prices, approaches 0 for oldest valid prices
+			// Using quadratic decay: (1 - age/maxAge)^2
+			timeFactor := 1.0 - (ageSeconds / maxAgeSeconds)
+			timeWeight := timeFactor * timeFactor // Quadratic decay
+
+			// Ensure minimum weight of 10% to not completely ignore valid prices
+			if timeWeight < 0.1 {
+				timeWeight = 0.1
+			}
+
+			// Apply time weight to source weight
+			adjustedWeight := int(float64(source.Weight) * timeWeight * 10) // Scale by 10 to preserve precision
+			if adjustedWeight < 1 {
+				adjustedWeight = 1
+			}
+
+			validPrices = append(validPrices, weightedPrice{
+				price:  priceData.Price,
+				weight: adjustedWeight,
+			})
+		} else {
+			// Fallback: no time decay if maxAgeSeconds is 0
+			validPrices = append(validPrices, weightedPrice{
+				price:  priceData.Price,
+				weight: source.Weight,
+			})
+		}
 	}
 
 	if len(validPrices) < config.MinSources {

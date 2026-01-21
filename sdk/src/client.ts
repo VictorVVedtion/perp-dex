@@ -442,6 +442,7 @@ export class PerpDEXClient {
 
   /**
    * Calculate position PnL
+   * CRITICAL FIX: Added input validation to prevent divide-by-zero errors
    */
   calculatePnL(
     position: Position,
@@ -456,6 +457,15 @@ export class PerpDEXClient {
     const markPrice = new BigNumber(currentPrice);
     const margin = new BigNumber(position.margin);
 
+    // Validate inputs to prevent NaN and divide-by-zero
+    if (size.isNaN() || entryPrice.isNaN() || markPrice.isNaN() || margin.isNaN()) {
+      return {
+        unrealizedPnl: new BigNumber(0),
+        unrealizedPnlPercent: new BigNumber(0),
+        roe: new BigNumber(0),
+      };
+    }
+
     let pnl: BigNumber;
     if (position.side === 'long') {
       pnl = size.times(markPrice.minus(entryPrice));
@@ -463,7 +473,11 @@ export class PerpDEXClient {
       pnl = size.times(entryPrice.minus(markPrice));
     }
 
-    const pnlPercent = pnl.div(entryPrice.times(size)).times(100);
+    // Guard against divide-by-zero
+    const notional = entryPrice.times(size);
+    const pnlPercent = notional.isPositive()
+      ? pnl.div(notional).times(100)
+      : new BigNumber(0);
     const roe = margin.isPositive() ? pnl.div(margin).times(100) : new BigNumber(0);
 
     return {
@@ -475,6 +489,7 @@ export class PerpDEXClient {
 
   /**
    * Calculate liquidation price
+   * CRITICAL FIX: Added input validation to prevent divide-by-zero errors
    */
   calculateLiquidationPrice(
     position: Position,
@@ -484,6 +499,11 @@ export class PerpDEXClient {
     const entryPrice = new BigNumber(position.entryPrice);
     const margin = new BigNumber(position.margin);
     const mmr = new BigNumber(maintenanceMarginRatio);
+
+    // Validate inputs
+    if (size.isNaN() || entryPrice.isNaN() || margin.isNaN() || !size.isPositive()) {
+      return new BigNumber(0);
+    }
 
     if (position.side === 'long') {
       // liquidation_price = entry_price - (margin - mmr * size * entry_price) / size
@@ -500,6 +520,7 @@ export class PerpDEXClient {
 
   /**
    * Calculate required margin
+   * CRITICAL FIX: Added input validation to prevent divide-by-zero errors
    */
   calculateRequiredMargin(
     size: string,
@@ -509,6 +530,11 @@ export class PerpDEXClient {
     const sizeNum = new BigNumber(size);
     const priceNum = new BigNumber(price);
     const leverageNum = new BigNumber(leverage);
+
+    // Validate inputs to prevent NaN and divide-by-zero
+    if (sizeNum.isNaN() || priceNum.isNaN() || leverageNum.isNaN() || !leverageNum.isPositive()) {
+      return new BigNumber(0);
+    }
 
     return sizeNum.times(priceNum).div(leverageNum);
   }

@@ -139,28 +139,45 @@ const INTERVAL_MAP: Record<string, string> = {
  */
 export class HyperliquidClient {
   private baseUrl: string;
+  private defaultTimeout: number;
 
-  constructor(baseUrl: string = HL_API_URL) {
+  constructor(baseUrl: string = HL_API_URL, timeout: number = 10000) {
     this.baseUrl = baseUrl;
+    this.defaultTimeout = timeout;
   }
 
   /**
    * Make a POST request to Hyperliquid API
+   * CRITICAL FIX: Added AbortController timeout to prevent indefinite hangs
    */
-  private async request<T>(payload: object): Promise<T> {
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+  private async request<T>(payload: object, timeout?: number): Promise<T> {
+    const controller = new AbortController();
+    const timeoutMs = timeout ?? this.defaultTimeout;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!response.ok) {
-      throw new Error(`Hyperliquid API error: ${response.status}`);
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Hyperliquid API error: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Hyperliquid API timeout after ${timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**

@@ -473,29 +473,52 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   setError: (error) => set({ error }),
 
   // Computed - Updated with new 5% margin rate
+  // CRITICAL FIX: Added input validation to prevent BigNumber errors
   calculateMargin: () => {
     const { price, quantity, leverage } = get();
     if (!price || !quantity || !leverage) return '0';
 
-    const notional = new BigNumber(price).times(quantity);
-    const margin = notional.times(0.05); // 5% initial margin (updated from 10%)
-    return margin.toFixed(2);
+    try {
+      const priceBN = new BigNumber(price);
+      const quantityBN = new BigNumber(quantity);
+
+      // Validate inputs are valid positive numbers
+      if (priceBN.isNaN() || quantityBN.isNaN() || !priceBN.isPositive() || !quantityBN.isPositive()) {
+        return '0';
+      }
+
+      const notional = priceBN.times(quantityBN);
+      const margin = notional.times(0.05); // 5% initial margin (updated from 10%)
+      return margin.toFixed(2);
+    } catch {
+      return '0';
+    }
   },
 
+  // CRITICAL FIX: Added input validation to prevent BigNumber errors
   calculatePnL: (position) => {
     const { priceInfo } = get();
     if (!priceInfo) return '0';
 
-    const markPrice = new BigNumber(priceInfo.markPrice);
-    const entryPrice = new BigNumber(position.entryPrice);
-    const size = new BigNumber(position.size);
+    try {
+      const markPrice = new BigNumber(priceInfo.markPrice);
+      const entryPrice = new BigNumber(position.entryPrice);
+      const size = new BigNumber(position.size);
 
-    let priceDiff = markPrice.minus(entryPrice);
-    if (position.side === 'short') {
-      priceDiff = priceDiff.negated();
+      // Validate inputs are valid numbers
+      if (markPrice.isNaN() || entryPrice.isNaN() || size.isNaN()) {
+        return '0';
+      }
+
+      let priceDiff = markPrice.minus(entryPrice);
+      if (position.side === 'short') {
+        priceDiff = priceDiff.negated();
+      }
+
+      return size.times(priceDiff).toFixed(2);
+    } catch {
+      return '0';
     }
-
-    return size.times(priceDiff).toFixed(2);
   },
 }));
 

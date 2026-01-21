@@ -408,6 +408,50 @@ func (ob *OrderBookV2) Clear() {
 	ob.Asks = skiplist.New(priceKeyAsc{})
 }
 
+// Lock acquires write lock for exclusive access during matching operations
+// CRITICAL: Must call Unlock() after use to prevent deadlocks
+func (ob *OrderBookV2) Lock() {
+	ob.mu.Lock()
+}
+
+// Unlock releases write lock
+func (ob *OrderBookV2) Unlock() {
+	ob.mu.Unlock()
+}
+
+// IterateBidsUnsafe iterates without acquiring lock (caller must hold lock)
+// Use this when you need to modify the order book during iteration
+func (ob *OrderBookV2) IterateBidsUnsafe(fn func(level *PriceLevelV2) bool) {
+	elem := ob.Bids.Front()
+	for elem != nil {
+		if !fn(elem.Value.(*PriceLevelV2)) {
+			break
+		}
+		elem = elem.Next()
+	}
+}
+
+// IterateAsksUnsafe iterates without acquiring lock (caller must hold lock)
+// Use this when you need to modify the order book during iteration
+func (ob *OrderBookV2) IterateAsksUnsafe(fn func(level *PriceLevelV2) bool) {
+	elem := ob.Asks.Front()
+	for elem != nil {
+		if !fn(elem.Value.(*PriceLevelV2)) {
+			break
+		}
+		elem = elem.Next()
+	}
+}
+
+// RemoveUnsafe removes a price level without acquiring lock (caller must hold lock)
+func (ob *OrderBookV2) RemoveUnsafe(price math.LegacyDec, side types.Side) {
+	if side == types.SideBuy {
+		ob.Bids.Remove(price)
+	} else {
+		ob.Asks.Remove(price)
+	}
+}
+
 // GetPriceLevel returns the price level at a specific price
 func (ob *OrderBookV2) GetPriceLevel(price math.LegacyDec, side types.Side) *PriceLevelV2 {
 	ob.mu.RLock()

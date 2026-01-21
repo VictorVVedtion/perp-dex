@@ -194,6 +194,7 @@ func (r *MatchResultV2) ToMatchResult() *MatchResult {
 }
 
 // Match attempts to match an incoming order against the order book
+// CRITICAL FIX: Uses write lock to prevent concurrent modification during matching
 func (me *MatchingEngineV2) Match(ctx sdk.Context, order *types.Order) (*MatchResultV2, error) {
 	orderBook := me.cache.GetOrderBook(ctx, me.keeper, order.MarketID)
 
@@ -208,12 +209,17 @@ func (me *MatchingEngineV2) Match(ctx sdk.Context, order *types.Order) (*MatchRe
 	// Track total value for average price calculation
 	totalValue := math.LegacyZeroDec()
 
-	// Determine which side to match against
+	// CRITICAL: Acquire write lock for the entire matching operation
+	// This prevents concurrent modification during iteration
+	orderBook.Lock()
+	defer orderBook.Unlock()
+
+	// Determine which side to match against (use unsafe iterators since we hold the lock)
 	var iterateFunc func(fn func(level *PriceLevelV2) bool)
 	if order.Side == types.SideBuy {
-		iterateFunc = orderBook.IterateAsks
+		iterateFunc = orderBook.IterateAsksUnsafe
 	} else {
-		iterateFunc = orderBook.IterateBids
+		iterateFunc = orderBook.IterateBidsUnsafe
 	}
 
 	// Levels to update after matching
@@ -299,12 +305,12 @@ func (me *MatchingEngineV2) Match(ctx sdk.Context, order *types.Order) (*MatchRe
 		return true // Continue iteration
 	})
 
-	// Remove empty levels
+	// Remove empty levels (use unsafe since we hold the lock)
 	for _, level := range levelsToRemove {
 		if order.Side == types.SideBuy {
-			orderBook.Asks.Remove(level.Price)
+			orderBook.RemoveUnsafe(level.Price, types.SideSell)
 		} else {
-			orderBook.Bids.Remove(level.Price)
+			orderBook.RemoveUnsafe(level.Price, types.SideBuy)
 		}
 	}
 

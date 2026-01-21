@@ -11,12 +11,46 @@ import type {
   ChainConfig,
 } from './types';
 
+// Keplr type definitions for better type safety
+interface KeplrKey {
+  name: string;
+  algo: string;
+  pubKey: Uint8Array;
+  address: Uint8Array;
+  bech32Address: string;
+  isNanoLedger: boolean;
+}
+
+interface KeplrOfflineSigner {
+  getAccounts(): Promise<readonly { address: string; pubkey: Uint8Array; algo: string }[]>;
+  signDirect(signerAddress: string, signDoc: unknown): Promise<{ signed: unknown; signature: unknown }>;
+  signAmino?(signerAddress: string, signDoc: unknown): Promise<{ signed: unknown; signature: unknown }>;
+}
+
+interface Keplr {
+  enable(chainId: string): Promise<void>;
+  getKey(chainId: string): Promise<KeplrKey>;
+  experimentalSuggestChain(chainInfo: unknown): Promise<void>;
+  sendTx(chainId: string, tx: Uint8Array, mode: unknown): Promise<Uint8Array>;
+  signArbitrary(
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array
+  ): Promise<{ signature: string; pub_key: { type: string; value: string } }>;
+  verifyArbitrary(
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array,
+    signature: unknown
+  ): Promise<boolean>;
+}
+
 // Keplr window interface
 declare global {
   interface Window {
-    keplr?: any;
-    getOfflineSigner?: (chainId: string) => any;
-    getOfflineSignerOnlyAmino?: (chainId: string) => any;
+    keplr?: Keplr;
+    getOfflineSigner?: (chainId: string) => KeplrOfflineSigner;
+    getOfflineSignerOnlyAmino?: (chainId: string) => KeplrOfflineSigner;
   }
 }
 
@@ -76,17 +110,34 @@ export class KeplrWallet implements IWallet {
   private _chainId: string;
   private _chainConfig: ChainConfig;
   private _eventHandlers: Map<WalletEvent, Set<WalletEventHandler>> = new Map();
+  // CRITICAL FIX: Store bound event handler for proper cleanup
+  private _keystoreChangeHandler: (() => void) | null = null;
 
   constructor(chainConfig: ChainConfig = PERPDEX_CHAIN_CONFIG) {
     this._chainConfig = chainConfig;
     this._chainId = chainConfig.chainId;
 
-    // Setup Keplr event listeners
+    // Setup Keplr event listeners with cleanup support
     if (typeof window !== 'undefined') {
-      window.addEventListener('keplr_keystorechange', () => {
+      this._keystoreChangeHandler = () => {
         this._handleAccountChange();
-      });
+      };
+      window.addEventListener('keplr_keystorechange', this._keystoreChangeHandler);
     }
+  }
+
+  /**
+   * Cleanup resources - call this when the wallet instance is no longer needed
+   * CRITICAL FIX: Prevents memory leaks from event listeners
+   */
+  destroy(): void {
+    if (typeof window !== 'undefined' && this._keystoreChangeHandler) {
+      window.removeEventListener('keplr_keystorechange', this._keystoreChangeHandler);
+      this._keystoreChangeHandler = null;
+    }
+    this._eventHandlers.clear();
+    this._connected = false;
+    this._account = null;
   }
 
   get connected(): boolean {
@@ -112,7 +163,7 @@ export class KeplrWallet implements IWallet {
    * Connect to Keplr wallet
    */
   async connect(): Promise<WalletAccount> {
-    if (!KeplrWallet.isInstalled()) {
+    if (!KeplrWallet.isInstalled() || !window.keplr || !window.getOfflineSigner) {
       throw new Error('Keplr wallet is not installed');
     }
 
@@ -124,7 +175,7 @@ export class KeplrWallet implements IWallet {
       await window.keplr.enable(this._chainId);
 
       // Get account
-      const offlineSigner = window.getOfflineSigner!(this._chainId);
+      const offlineSigner = window.getOfflineSigner(this._chainId);
       const accounts = await offlineSigner.getAccounts();
 
       if (accounts.length === 0) {
@@ -175,13 +226,13 @@ export class KeplrWallet implements IWallet {
    */
   async signDirect(
     signerAddress: string,
-    signDoc: any
-  ): Promise<{ signed: any; signature: any }> {
-    if (!this._connected) {
+    signDoc: unknown
+  ): Promise<{ signed: unknown; signature: unknown }> {
+    if (!this._connected || !window.getOfflineSigner) {
       throw new Error('Wallet not connected');
     }
 
-    const offlineSigner = window.getOfflineSigner!(this._chainId);
+    const offlineSigner = window.getOfflineSigner(this._chainId);
     return offlineSigner.signDirect(signerAddress, signDoc);
   }
 
@@ -190,21 +241,24 @@ export class KeplrWallet implements IWallet {
    */
   async signAmino(
     signerAddress: string,
-    signDoc: any
-  ): Promise<{ signed: any; signature: any }> {
-    if (!this._connected) {
+    signDoc: unknown
+  ): Promise<{ signed: unknown; signature: unknown }> {
+    if (!this._connected || !window.getOfflineSignerOnlyAmino) {
       throw new Error('Wallet not connected');
     }
 
-    const offlineSigner = window.getOfflineSignerOnlyAmino!(this._chainId);
+    const offlineSigner = window.getOfflineSignerOnlyAmino(this._chainId);
+    if (!offlineSigner.signAmino) {
+      throw new Error('Amino signing not supported');
+    }
     return offlineSigner.signAmino(signerAddress, signDoc);
   }
 
   /**
    * Send a signed transaction
    */
-  async sendTx(tx: Uint8Array, mode: any = 'sync'): Promise<Uint8Array> {
-    if (!this._connected) {
+  async sendTx(tx: Uint8Array, mode: unknown = 'sync'): Promise<Uint8Array> {
+    if (!this._connected || !window.keplr) {
       throw new Error('Wallet not connected');
     }
 
@@ -218,7 +272,7 @@ export class KeplrWallet implements IWallet {
     signerAddress: string,
     data: string | Uint8Array
   ): Promise<{ signature: string; pub_key: { type: string; value: string } }> {
-    if (!this._connected) {
+    if (!this._connected || !window.keplr) {
       throw new Error('Wallet not connected');
     }
 
@@ -231,8 +285,11 @@ export class KeplrWallet implements IWallet {
   async verifyArbitrary(
     signerAddress: string,
     data: string | Uint8Array,
-    signature: any
+    signature: unknown
   ): Promise<boolean> {
+    if (!window.keplr) {
+      throw new Error('Keplr not available');
+    }
     return window.keplr.verifyArbitrary(
       this._chainId,
       signerAddress,
@@ -264,17 +321,19 @@ export class KeplrWallet implements IWallet {
   /**
    * Get offline signer
    */
-  getOfflineSigner(): any {
-    if (!this._connected) {
+  getOfflineSigner(): KeplrOfflineSigner {
+    if (!this._connected || !window.getOfflineSigner) {
       throw new Error('Wallet not connected');
     }
-    return window.getOfflineSigner!(this._chainId);
+    return window.getOfflineSigner(this._chainId);
   }
 
   /**
    * Suggest the chain to Keplr
    */
   private async _suggestChain(): Promise<void> {
+    if (!window.keplr) return;
+
     try {
       await window.keplr.experimentalSuggestChain({
         chainId: this._chainConfig.chainId,
@@ -288,9 +347,10 @@ export class KeplrWallet implements IWallet {
         feeCurrencies: this._chainConfig.feeCurrencies,
         features: this._chainConfig.features,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Chain might already be added, continue
-      console.warn('Failed to suggest chain:', error.message);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('Failed to suggest chain:', message);
     }
   }
 
@@ -298,11 +358,11 @@ export class KeplrWallet implements IWallet {
    * Handle account change
    */
   private async _handleAccountChange(): Promise<void> {
-    if (!this._connected) return;
+    if (!this._connected || !window.keplr || !window.getOfflineSigner) return;
 
     try {
       const key = await window.keplr.getKey(this._chainId);
-      const offlineSigner = window.getOfflineSigner!(this._chainId);
+      const offlineSigner = window.getOfflineSigner(this._chainId);
       const accounts = await offlineSigner.getAccounts();
 
       if (accounts.length > 0) {
