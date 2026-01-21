@@ -212,9 +212,10 @@ func (k *Keeper) SubmitSourcePrice(ctx sdk.Context, sourceID, marketID string, p
 				"current_price", currentPrice.MarkPrice.String(),
 				"deviation", deviation.String(),
 			)
-			return fmt.Errorf("price deviation %.2f%% exceeds circuit breaker %.2f%%",
-				deviation.MulInt64(100).MustFloat64(),
-				config.CircuitBreakerPct.MulInt64(100).MustFloat64())
+			// CRITICAL FIX: Use String() instead of MustFloat64() to avoid potential panic
+			return fmt.Errorf("price deviation %s%% exceeds circuit breaker %s%%",
+				deviation.MulInt64(100).String(),
+				config.CircuitBreakerPct.MulInt64(100).String())
 		}
 	}
 

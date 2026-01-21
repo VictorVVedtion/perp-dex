@@ -65,6 +65,8 @@ func (k *Keeper) BuildADLQueue(ctx sdk.Context, marketID, side string) *types.AD
 	}
 
 	// Filter and calculate PnL for each position
+	// CRITICAL: Only include profitable positions for ADL (positive PnL)
+	// ADL should only deleverage profitable positions to cover system deficits
 	for _, pos := range positions {
 		if pos.MarketID != marketID || pos.Side != targetSide {
 			continue
@@ -72,6 +74,14 @@ func (k *Keeper) BuildADLQueue(ctx sdk.Context, marketID, side string) *types.AD
 
 		// Calculate unrealized PnL
 		pnl := pos.CalculateUnrealizedPnL(markPrice)
+
+		// CRITICAL FIX: Skip positions with zero or negative PnL
+		// ADL is designed to take profit from winning positions to cover losses
+		// Deleveraging losing positions doesn't help cover the deficit
+		if pnl.IsNegative() || pnl.IsZero() {
+			continue
+		}
+
 		pnlPercent := math.LegacyZeroDec()
 		if pos.Margin.IsPositive() {
 			pnlPercent = pnl.Quo(pos.Margin)
@@ -245,9 +255,16 @@ func (k *Keeper) deleveragePosition(ctx sdk.Context, adlPos *types.ADLPosition, 
 	}
 
 	// Return the deficit coverage (realized profit from forced closure)
+	// CRITICAL: Only positive PnL can cover deficit
+	// With the BuildADLQueue fix, we should only get profitable positions
+	// This is a defensive check in case of edge cases
 	if totalPnL.IsPositive() {
 		return totalPnL, nil
 	}
+
+	// If we reach here with non-positive PnL, something went wrong
+	// Log warning but don't return error to avoid breaking the ADL loop
+	// The position was already reduced, so we return 0 coverage
 	return math.LegacyZeroDec(), nil
 }
 

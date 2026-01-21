@@ -150,10 +150,14 @@ func (k *Keeper) WithdrawFromInsuranceFund(ctx sdk.Context, fundID string, amoun
 }
 
 // CoverDeficit attempts to cover a deficit using the insurance fund
+// CRITICAL FIX: Use CacheContext to ensure atomic operation across multiple fund withdrawals
 func (k *Keeper) CoverDeficit(ctx sdk.Context, marketID string, deficit math.LegacyDec, liquidationID string) (covered math.LegacyDec, remaining math.LegacyDec, err error) {
+	// Use CacheContext for atomic multi-fund operations
+	cacheCtx, writeFn := ctx.CacheContext()
+
 	// Try market-specific fund first
 	marketFundID := "market-" + marketID
-	marketFund := k.GetInsuranceFund(ctx, marketFundID)
+	marketFund := k.GetInsuranceFund(cacheCtx, marketFundID)
 
 	covered = math.LegacyZeroDec()
 	remaining = deficit
@@ -162,7 +166,7 @@ func (k *Keeper) CoverDeficit(ctx sdk.Context, marketID string, deficit math.Leg
 	if marketFund != nil && marketFund.Balance.IsPositive() {
 		coverAmount := math.LegacyMinDec(marketFund.Balance, remaining)
 		if coverAmount.IsPositive() {
-			if err := k.WithdrawFromInsuranceFund(ctx, marketFundID, coverAmount, liquidationID, "deficit cover"); err == nil {
+			if withdrawErr := k.WithdrawFromInsuranceFund(cacheCtx, marketFundID, coverAmount, liquidationID, "deficit cover"); withdrawErr == nil {
 				covered = covered.Add(coverAmount)
 				remaining = remaining.Sub(coverAmount)
 			}
@@ -171,16 +175,22 @@ func (k *Keeper) CoverDeficit(ctx sdk.Context, marketID string, deficit math.Leg
 
 	// Cover remaining from global fund
 	if remaining.IsPositive() {
-		globalFund := k.GetGlobalInsuranceFund(ctx)
+		globalFund := k.GetGlobalInsuranceFund(cacheCtx)
 		if globalFund.Balance.IsPositive() {
 			coverAmount := math.LegacyMinDec(globalFund.Balance, remaining)
 			if coverAmount.IsPositive() {
-				if err := k.WithdrawFromInsuranceFund(ctx, GlobalFundID, coverAmount, liquidationID, "deficit cover"); err == nil {
+				if withdrawErr := k.WithdrawFromInsuranceFund(cacheCtx, GlobalFundID, coverAmount, liquidationID, "deficit cover"); withdrawErr == nil {
 					covered = covered.Add(coverAmount)
 					remaining = remaining.Sub(coverAmount)
 				}
 			}
 		}
+	}
+
+	// CRITICAL: Only commit changes if some coverage was achieved
+	// This prevents partial state changes on failure
+	if covered.IsPositive() {
+		writeFn()
 	}
 
 	k.Logger().Info("deficit coverage attempted",

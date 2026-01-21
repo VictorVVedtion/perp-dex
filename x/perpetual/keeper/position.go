@@ -264,11 +264,31 @@ func (pm *PositionManager) UpdatePositionFromTrade(
 		}
 	}
 
-	// Deduct fee from account
+	// Deduct fee from account with balance check
 	account := pm.keeper.GetAccount(ctx, trader)
 	if account != nil && fee.IsPositive() {
-		account.Balance = account.Balance.Sub(fee)
-		pm.keeper.SetAccount(ctx, account)
+		// CRITICAL: Check if account has sufficient balance for fee
+		if account.Balance.LT(fee) {
+			// If insufficient balance, deduct what's available and log warning
+			// This prevents negative balance while allowing trade to complete
+			availableFee := account.Balance
+			if availableFee.IsPositive() {
+				account.Balance = math.LegacyZeroDec()
+				pm.keeper.SetAccount(ctx, account)
+				// Emit warning event for partial fee collection
+				ctx.EventManager().EmitEvent(
+					sdk.NewEvent(
+						"partial_fee_collected",
+						sdk.NewAttribute("trader", trader),
+						sdk.NewAttribute("expected_fee", fee.String()),
+						sdk.NewAttribute("collected_fee", availableFee.String()),
+					),
+				)
+			}
+		} else {
+			account.Balance = account.Balance.Sub(fee)
+			pm.keeper.SetAccount(ctx, account)
+		}
 	}
 
 	return nil

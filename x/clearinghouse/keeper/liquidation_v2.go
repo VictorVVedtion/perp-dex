@@ -1,14 +1,19 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/openalpha/perp-dex/x/clearinghouse/types"
 	perpetualtypes "github.com/openalpha/perp-dex/x/perpetual/types"
 )
+
+// Store key prefix for liquidation states - CRITICAL: Persist to chain storage
+var LiquidationStateKeyPrefix = []byte{0x30}
 
 // LiquidationEngineV2 implements the three-tier liquidation mechanism
 // aligned with Hyperliquid's liquidation system
@@ -41,6 +46,77 @@ func NewLiquidationEngineV2WithConfig(keeper *Keeper, config types.LiquidationCo
 // GetConfig returns the current liquidation configuration
 func (le *LiquidationEngineV2) GetConfig() types.LiquidationConfig {
 	return le.config
+}
+
+// ============ Liquidation State Persistence ============
+// CRITICAL FIX: Persist liquidation states to chain storage to survive node restarts
+
+// saveLiquidationState persists a liquidation state to chain storage
+func (le *LiquidationEngineV2) saveLiquidationState(ctx sdk.Context, state *types.LiquidationState) {
+	store := le.keeper.GetStore(ctx)
+	key := append(LiquidationStateKeyPrefix, []byte(state.PositionID)...)
+	bz, err := json.Marshal(state)
+	if err != nil {
+		le.keeper.Logger().Error("failed to marshal liquidation state", "key", state.PositionID, "error", err)
+		return
+	}
+	store.Set(key, bz)
+	// Also keep in memory cache for fast access
+	le.liquidationStates[state.PositionID] = state
+}
+
+// loadLiquidationState loads a liquidation state from chain storage
+func (le *LiquidationEngineV2) loadLiquidationState(ctx sdk.Context, stateKey string) *types.LiquidationState {
+	// Check memory cache first
+	if state, exists := le.liquidationStates[stateKey]; exists {
+		return state
+	}
+
+	// Load from chain storage
+	store := le.keeper.GetStore(ctx)
+	key := append(LiquidationStateKeyPrefix, []byte(stateKey)...)
+	bz := store.Get(key)
+	if bz == nil {
+		return nil
+	}
+
+	var state types.LiquidationState
+	if err := json.Unmarshal(bz, &state); err != nil {
+		le.keeper.Logger().Error("failed to unmarshal liquidation state", "key", stateKey, "error", err)
+		return nil
+	}
+
+	// Cache in memory
+	le.liquidationStates[stateKey] = &state
+	return &state
+}
+
+// deleteLiquidationState removes a liquidation state from both store and cache
+func (le *LiquidationEngineV2) deleteLiquidationState(ctx sdk.Context, stateKey string) {
+	store := le.keeper.GetStore(ctx)
+	key := append(LiquidationStateKeyPrefix, []byte(stateKey)...)
+	store.Delete(key)
+	delete(le.liquidationStates, stateKey)
+}
+
+// loadAllLiquidationStates loads all liquidation states from chain storage into memory
+// Called during initialization to restore state after node restart
+func (le *LiquidationEngineV2) loadAllLiquidationStates(ctx sdk.Context) {
+	store := le.keeper.GetStore(ctx)
+	iterator := storetypes.KVStorePrefixIterator(store, LiquidationStateKeyPrefix)
+	defer iterator.Close()
+
+	for ; iterator.Valid(); iterator.Next() {
+		var state types.LiquidationState
+		if err := json.Unmarshal(iterator.Value(), &state); err != nil {
+			continue
+		}
+		le.liquidationStates[state.PositionID] = &state
+	}
+
+	le.keeper.Logger().Info("loaded liquidation states from storage",
+		"count", len(le.liquidationStates),
+	)
 }
 
 // UpdateConfig updates the liquidation configuration
@@ -119,12 +195,12 @@ func (le *LiquidationEngineV2) ProcessLiquidation(
 		return nil, types.ErrPositionHealthy
 	}
 
-	// Get or create liquidation state
+	// Get or create liquidation state (with persistence)
 	stateKey := fmt.Sprintf("%s:%s", trader, marketID)
-	state, exists := le.liquidationStates[stateKey]
-	if !exists {
+	state := le.loadLiquidationState(ctx, stateKey)
+	if state == nil {
 		state = types.NewLiquidationState(stateKey, trader, marketID, health.PositionSize)
-		le.liquidationStates[stateKey] = state
+		le.saveLiquidationState(ctx, state)
 	}
 
 	// Check cooldown
@@ -232,9 +308,11 @@ func (le *LiquidationEngineV2) executeMarketOrderLiquidation(
 	// Update state
 	state.UpdateAfterLiquidation(liquidatedSize, penalty, types.TierMarketOrder)
 
-	// Clean up state if fully liquidated
+	// Clean up state if fully liquidated (with persistence)
 	if state.IsFullyLiquidated() {
-		delete(le.liquidationStates, fmt.Sprintf("%s:%s", health.Trader, health.MarketID))
+		le.deleteLiquidationState(ctx, fmt.Sprintf("%s:%s", health.Trader, health.MarketID))
+	} else {
+		le.saveLiquidationState(ctx, state)
 	}
 
 	// Emit event
@@ -350,6 +428,9 @@ func (le *LiquidationEngineV2) executePartialLiquidation(
 	state.UpdateAfterLiquidation(liquidatedSize, penalty, types.TierPartialLiquidation)
 	state.StartCooldown(le.config.CooldownPeriod)
 
+	// CRITICAL FIX: Persist state after cooldown starts
+	le.saveLiquidationState(ctx, state)
+
 	// Emit event
 	le.emitLiquidationEvent(ctx, liquidationID, position.Trader, position.MarketID,
 		liquidatedSize, health.MarkPrice, penalty, liquidatorReward, insuranceFundFee,
@@ -459,8 +540,8 @@ func (le *LiquidationEngineV2) executeBackstopLiquidation(
 	state.UpdateAfterLiquidation(liquidatedSize, penalty, types.TierBackstopLiquidation)
 	state.IsBackstopTriggered = true
 
-	// Clean up state
-	delete(le.liquidationStates, fmt.Sprintf("%s:%s", health.Trader, health.MarketID))
+	// CRITICAL FIX: Clean up state with persistence
+	le.deleteLiquidationState(ctx, fmt.Sprintf("%s:%s", health.Trader, health.MarketID))
 
 	// Emit event
 	le.emitLiquidationEvent(ctx, liquidationID, position.Trader, position.MarketID,
@@ -531,6 +612,10 @@ func (le *LiquidationEngineV2) EndBlockLiquidationsV2(ctx sdk.Context) Liquidati
 		TotalPenalties: math.LegacyZeroDec(),
 	}
 
+	// CRITICAL FIX: Load all liquidation states from chain storage at start
+	// This ensures states survive node restarts
+	le.loadAllLiquidationStates(ctx)
+
 	// Get all unhealthy positions
 	unhealthyPositions := le.keeper.GetUnhealthyPositions(ctx)
 
@@ -591,9 +676,12 @@ func (le *LiquidationEngineV2) EndBlockLiquidationsV2(ctx sdk.Context) Liquidati
 			}
 		}
 
-		// Clean up fully liquidated states
+		// CRITICAL FIX: Clean up fully liquidated states with persistence
 		if state.IsFullyLiquidated() {
-			delete(le.liquidationStates, key)
+			le.deleteLiquidationState(ctx, key)
+		} else if state.IsInCooldown {
+			// Persist cooldown state changes
+			le.saveLiquidationState(ctx, state)
 		}
 	}
 
