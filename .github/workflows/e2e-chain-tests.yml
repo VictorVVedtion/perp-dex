@@ -1,0 +1,219 @@
+# Real Chain E2E Tests
+# Runs end-to-end tests against a real CometBFT chain
+#
+# This workflow:
+# 1. Builds the perpdexd binary
+# 2. Initializes a test chain
+# 3. Starts the chain
+# 4. Runs E2E tests against the running chain
+# 5. Reports results
+
+name: E2E Chain Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'x/**'
+      - 'app/**'
+      - 'cmd/**'
+      - 'tests/e2e_chain/**'
+      - 'proto/**'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'x/**'
+      - 'app/**'
+      - 'cmd/**'
+      - 'tests/e2e_chain/**'
+      - 'proto/**'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Test filter pattern (e.g., TestRiverPool)'
+        required: false
+        default: ''
+      verbose:
+        description: 'Enable verbose output'
+        required: false
+        default: 'false'
+
+env:
+  GO_VERSION: '1.21'
+  CHAIN_ID: 'perpdex-test-1'
+
+jobs:
+  e2e-chain-tests:
+    name: Real Chain E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Build binary
+        run: |
+          make build
+          ls -la build/
+
+      - name: Initialize test chain
+        run: |
+          ./build/perpdexd init test-node --chain-id ${{ env.CHAIN_ID }} --home .perpdex-test
+
+          # Create test accounts
+          ./build/perpdexd keys add validator --keyring-backend test --home .perpdex-test
+          ./build/perpdexd keys add trader1 --keyring-backend test --home .perpdex-test
+          ./build/perpdexd keys add trader2 --keyring-backend test --home .perpdex-test
+
+          # Get addresses
+          VALIDATOR_ADDR=$(./build/perpdexd keys show validator --keyring-backend test --home .perpdex-test -a)
+          TRADER1_ADDR=$(./build/perpdexd keys show trader1 --keyring-backend test --home .perpdex-test -a)
+          TRADER2_ADDR=$(./build/perpdexd keys show trader2 --keyring-backend test --home .perpdex-test -a)
+
+          # Add genesis accounts
+          ./build/perpdexd add-genesis-account $VALIDATOR_ADDR "10000000000000usdc,10000000000ubtc" --home .perpdex-test --keyring-backend test
+          ./build/perpdexd add-genesis-account $TRADER1_ADDR "10000000000000usdc,10000000000ubtc" --home .perpdex-test --keyring-backend test
+          ./build/perpdexd add-genesis-account $TRADER2_ADDR "10000000000000usdc,10000000000ubtc" --home .perpdex-test --keyring-backend test
+
+          # Create gentx
+          ./build/perpdexd gentx validator 1000000000usdc --chain-id ${{ env.CHAIN_ID }} --home .perpdex-test --keyring-backend test
+
+          # Collect gentxs
+          ./build/perpdexd collect-gentxs --home .perpdex-test
+
+      - name: Start chain
+        run: |
+          ./build/perpdexd start \
+            --home .perpdex-test \
+            --minimum-gas-prices "0usdc" \
+            --log_level "warn" \
+            > chain.log 2>&1 &
+
+          echo "Waiting for chain to start..."
+          for i in {1..60}; do
+            if curl -s http://localhost:26657/status > /dev/null 2>&1; then
+              HEIGHT=$(curl -s http://localhost:26657/status | jq -r '.result.sync_info.latest_block_height')
+              if [ "$HEIGHT" != "null" ] && [ "$HEIGHT" -gt "0" ]; then
+                echo "Chain ready at height $HEIGHT"
+                exit 0
+              fi
+            fi
+            sleep 1
+          done
+
+          echo "Chain failed to start"
+          cat chain.log | tail -100
+          exit 1
+
+      - name: Run E2E chain tests
+        env:
+          PERPDEX_RPC_URL: http://localhost:26657
+          PERPDEX_API_URL: http://localhost:1317
+          PERPDEX_CHAIN_ID: ${{ env.CHAIN_ID }}
+          PERPDEX_AUTO_START: 'false'
+          PERPDEX_CLEANUP: 'false'
+          PERPDEX_VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
+        run: |
+          TEST_ARGS="-v -count=1"
+
+          if [ -n "${{ github.event.inputs.test_filter }}" ]; then
+            TEST_ARGS="$TEST_ARGS -run ${{ github.event.inputs.test_filter }}"
+          fi
+
+          go test $TEST_ARGS ./tests/e2e_chain/... 2>&1 | tee test-output.txt
+
+          # Parse test results
+          PASSED=$(grep -c "^--- PASS" test-output.txt || echo "0")
+          FAILED=$(grep -c "^--- FAIL" test-output.txt || echo "0")
+          SKIPPED=$(grep -c "^--- SKIP" test-output.txt || echo "0")
+
+          echo "## E2E Chain Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+
+          # Fail if any tests failed
+          if [ "$FAILED" -gt "0" ]; then
+            exit 1
+          fi
+
+      - name: Upload chain logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chain-logs
+          path: |
+            chain.log
+            test-output.txt
+            .perpdex-test/chain.log
+          retention-days: 7
+
+      - name: Stop chain
+        if: always()
+        run: |
+          pkill perpdexd || true
+
+  # Separate job for RiverPool-specific tests
+  riverpool-tests:
+    name: RiverPool Chain Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-chain-tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build and initialize
+        run: |
+          go mod download
+          make build
+
+          # Quick init
+          ./build/perpdexd init test-node --chain-id perpdex-riverpool-test --home .perpdex-test
+          ./build/perpdexd keys add validator --keyring-backend test --home .perpdex-test
+          ADDR=$(./build/perpdexd keys show validator --keyring-backend test --home .perpdex-test -a)
+          ./build/perpdexd add-genesis-account $ADDR "100000000000000usdc" --home .perpdex-test --keyring-backend test
+          ./build/perpdexd gentx validator 1000000000usdc --chain-id perpdex-riverpool-test --home .perpdex-test --keyring-backend test
+          ./build/perpdexd collect-gentxs --home .perpdex-test
+
+      - name: Start chain
+        run: |
+          ./build/perpdexd start --home .perpdex-test --minimum-gas-prices "0usdc" > chain.log 2>&1 &
+          sleep 15
+
+      - name: Run RiverPool tests
+        env:
+          PERPDEX_AUTO_START: 'false'
+          PERPDEX_CHAIN_ID: 'perpdex-riverpool-test'
+        run: |
+          go test -v -run "TestSuite_RiverPool" ./tests/e2e_chain/... -count=1
+
+      - name: Stop chain
+        if: always()
+        run: pkill perpdexd || true
