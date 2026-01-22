@@ -372,7 +372,7 @@ export const useRiverpoolStore = create<RiverpoolState>((set, get) => ({
   userOwnedPools: [],
   // UI state
   activeTab: 'foundation',
-  isLoading: false,
+  isLoading: true, // Start with loading=true to show loading state until first fetch completes
   error: null,
   depositAmount: '',
   depositPoolId: '',

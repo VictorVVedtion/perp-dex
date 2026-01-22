@@ -212,6 +212,57 @@ export class WebSocketClient {
     this.subscribe('tickers', handler);
   }
 
+  // ============ RiverPool Subscriptions ============
+
+  /**
+   * Subscribe to pool updates for a specific pool
+   */
+  subscribePool(poolId: string, handler: MessageHandler): void {
+    this.subscribe(`riverpool:pool:${poolId}`, handler);
+  }
+
+  /**
+   * Subscribe to all pool updates
+   */
+  subscribeAllPools(handler: MessageHandler): void {
+    this.subscribe('riverpool:pools', handler);
+  }
+
+  /**
+   * Subscribe to NAV updates for a pool
+   */
+  subscribeNAV(poolId: string, handler: MessageHandler): void {
+    this.subscribe(`riverpool:nav:${poolId}`, handler);
+  }
+
+  /**
+   * Subscribe to DDGuard updates for a pool
+   */
+  subscribeDDGuard(poolId: string, handler: MessageHandler): void {
+    this.subscribe(`riverpool:ddguard:${poolId}`, handler);
+  }
+
+  /**
+   * Subscribe to user's withdrawal updates
+   */
+  subscribeWithdrawals(userId: string, handler: MessageHandler): void {
+    this.subscribe(`riverpool:withdrawals:${userId}`, handler);
+  }
+
+  /**
+   * Subscribe to user's deposit confirmations
+   */
+  subscribeDeposits(userId: string, handler: MessageHandler): void {
+    this.subscribe(`riverpool:deposits:${userId}`, handler);
+  }
+
+  /**
+   * Subscribe to revenue events for a pool
+   */
+  subscribeRevenue(poolId: string, handler: MessageHandler): void {
+    this.subscribe(`riverpool:revenue:${poolId}`, handler);
+  }
+
   // ============ Event Handlers ============
 
   /**

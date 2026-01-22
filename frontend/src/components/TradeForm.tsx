@@ -92,6 +92,23 @@ export function TradeForm() {
     return null;
   }, [connected, quantity, orderType, price, margin, account.balance, trailingConfig]);
 
+  // Handle percent click
+  const handlePercentClick = (percent: number) => {
+    const priceVal = parseFloat(price);
+    const balanceVal = parseFloat(account.balance);
+    if (balanceVal <= 0) return;
+
+    // Use price if available for calculation
+    const refPrice = priceVal > 0 ? priceVal : 0;
+    if (refPrice <= 0) return;
+
+    const maxMargin = balanceVal * 0.99; // 99% usage
+    const targetNotional = maxMargin * percent * parseFloat(leverage);
+    const targetQty = targetNotional / refPrice;
+
+    setQuantity(targetQty.toFixed(4));
+  };
+
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,23 +199,40 @@ export function TradeForm() {
     }
   };
 
+  const isBuy = orderSide === 'buy';
+
   return (
-    <div className="bg-dark-900 rounded-lg border border-dark-700">
+    <div className="relative overflow-hidden backdrop-blur-xl bg-dark-900/80 rounded-xl border border-dark-700/50 shadow-2xl transition-all duration-300 hover:shadow-glow-sm">
+      {/* Background decoration */}
+      <div className={`absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 rounded-full blur-3xl opacity-10 transition-colors duration-500 ${isBuy ? 'bg-primary-500' : 'bg-danger-500'}`}></div>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b border-dark-700">
-        <h3 className="text-sm font-medium text-white">Place Order</h3>
+      <div className="px-5 py-4 border-b border-dark-700/50 flex items-center justify-between relative z-10">
+        <h3 className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
+           Place Order
+           {isMockMode && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">MOCK</span>}
+        </h3>
+        <div className="flex items-center space-x-2 text-xs text-dark-400">
+             <span>Bal:</span>
+             <span className="text-white font-mono">{parseFloat(account.balance).toLocaleString()}</span>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      <form onSubmit={handleSubmit} className="p-5 space-y-6 relative z-10">
         {/* Buy/Sell Toggle */}
-        <div className="flex rounded-lg overflow-hidden">
+        <div className="relative flex bg-dark-950/50 p-1 rounded-lg border border-dark-700/50">
+           <div
+             className={`absolute inset-y-1 rounded-md transition-all duration-300 ease-out shadow-lg ${
+               isBuy
+                 ? 'bg-primary-500 left-1 right-1/2 mr-0.5'
+                 : 'bg-danger-500 left-1/2 right-1 ml-0.5'
+             }`}
+           />
           <button
             type="button"
             onClick={() => setOrderSide('buy')}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              orderSide === 'buy'
-                ? 'bg-primary-600 text-white'
-                : 'bg-dark-800 text-dark-300 hover:bg-dark-700'
+            className={`flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors duration-200 ${
+              isBuy ? 'text-white' : 'text-dark-400 hover:text-white'
             }`}
           >
             Long
@@ -206,207 +240,195 @@ export function TradeForm() {
           <button
             type="button"
             onClick={() => setOrderSide('sell')}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              orderSide === 'sell'
-                ? 'bg-danger-600 text-white'
-                : 'bg-dark-800 text-dark-300 hover:bg-dark-700'
+            className={`flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors duration-200 ${
+              !isBuy ? 'text-white' : 'text-dark-400 hover:text-white'
             }`}
           >
             Short
           </button>
         </div>
 
-        {/* Order Type */}
-        <div className="flex space-x-2">
-          <button
-            type="button"
-            onClick={() => setOrderType('limit')}
-            className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${
-              orderType === 'limit'
-                ? 'bg-dark-700 text-white'
-                : 'text-dark-400 hover:text-white'
-            }`}
-          >
-            Limit
-          </button>
-          <button
-            type="button"
-            onClick={() => setOrderType('market')}
-            className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${
-              orderType === 'market'
-                ? 'bg-dark-700 text-white'
-                : 'text-dark-400 hover:text-white'
-            }`}
-          >
-            Market
-          </button>
-          <button
-            type="button"
-            onClick={() => setOrderType('trailing_stop' as any)}
-            className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${
-              orderType === 'trailing_stop'
-                ? 'bg-dark-700 text-white'
-                : 'text-dark-400 hover:text-white'
-            }`}
-          >
-            追踪止损
-          </button>
+        {/* Order Type Tabs */}
+        <div className="flex border-b border-dark-700/50 pb-1">
+          {['limit', 'market', 'trailing_stop'].map((type) => (
+             <button
+                key={type}
+                type="button"
+                onClick={() => setOrderType(type as any)}
+                className={`flex-1 pb-2 text-xs font-medium transition-all duration-200 relative ${
+                    orderType === type ? 'text-white' : 'text-dark-400 hover:text-dark-200'
+                }`}
+             >
+                {type === 'trailing_stop' ? 'Trailing' : type.charAt(0).toUpperCase() + type.slice(1)}
+                {/* Active Indicator */}
+                <span className={`absolute bottom-[-5px] left-0 w-full h-[2px] transform transition-transform duration-300 ${
+                    orderType === type ? `scale-x-100 ${isBuy ? 'bg-primary-500' : 'bg-danger-500'}` : 'scale-x-0'
+                }`} />
+             </button>
+          ))}
         </div>
 
-        {/* Price Input (for limit orders) */}
-        {orderType === 'limit' && (
-          <div>
-            <label className="block text-xs text-dark-400 mb-1">Price (USDC)</label>
-            <div className="relative">
-              <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0.00"
-                step="0.01"
-                className="w-full bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm font-mono focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-          </div>
-        )}
+        {/* Inputs Section */}
+        <div className="space-y-4">
+             {/* Price Input */}
+             {orderType === 'limit' && (
+                <div className="group">
+                    <div className="flex justify-between text-xs mb-1.5 px-1">
+                        <span className="text-dark-400">Price</span>
+                        <span className="text-dark-500">USDC</span>
+                    </div>
+                    <div className="relative">
+                        <input
+                            type="number"
+                            value={price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            placeholder="0.00"
+                            step="0.01"
+                            className={`w-full bg-dark-800/50 border border-dark-600 rounded-lg px-4 py-3 text-white text-sm font-mono transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-opacity-50 ${isBuy ? 'focus:border-primary-500 focus:ring-primary-500/20' : 'focus:border-danger-500 focus:ring-danger-500/20'}`}
+                        />
+                    </div>
+                </div>
+             )}
 
-        {/* Trailing Stop Config */}
-        {orderType === 'trailing_stop' && (
-          <div className="space-y-3 p-3 bg-dark-800 rounded-lg">
-            <div>
-              <label className="block text-xs text-dark-400 mb-1">跟踪类型</label>
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setTrailingConfig({ ...trailingConfig, trailType: 'amount' })}
-                  className={`flex-1 py-1.5 text-xs rounded ${
-                    trailingConfig.trailType === 'amount'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-dark-700 text-dark-400'
-                  }`}
-                >
-                  固定金额
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTrailingConfig({ ...trailingConfig, trailType: 'percent' })}
-                  className={`flex-1 py-1.5 text-xs rounded ${
-                    trailingConfig.trailType === 'percent'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-dark-700 text-dark-400'
-                  }`}
-                >
-                  百分比
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs text-dark-400 mb-1">
-                {trailingConfig.trailType === 'amount' ? '跟踪距离 ($)' : '跟踪比例 (%)'}
-              </label>
-              <input
-                type="number"
-                value={trailingConfig.trailValue}
-                onChange={(e) => setTrailingConfig({ ...trailingConfig, trailValue: e.target.value })}
-                placeholder={trailingConfig.trailType === 'amount' ? '100' : '5'}
-                step={trailingConfig.trailType === 'amount' ? '1' : '0.1'}
-                className="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white text-sm font-mono focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-dark-400 mb-1">激活价格 (可选)</label>
-              <input
-                type="number"
-                value={trailingConfig.activationPrice}
-                onChange={(e) => setTrailingConfig({ ...trailingConfig, activationPrice: e.target.value })}
-                placeholder="留空则立即激活"
-                className="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white text-sm font-mono focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-          </div>
-        )}
+            {/* Trailing Config */}
+            {orderType === 'trailing_stop' && (
+               <div className="space-y-3 p-4 bg-dark-800/30 rounded-lg border border-dark-700/30">
+                  <div className="grid grid-cols-2 gap-2">
+                       <button type="button" onClick={() => setTrailingConfig({ ...trailingConfig, trailType: 'amount' })} className={`py-1.5 text-xs rounded border transition-colors ${trailingConfig.trailType === 'amount' ? 'bg-primary-500/10 border-primary-500 text-primary-500' : 'border-dark-600 text-dark-400 hover:border-dark-500'}`}>Amount</button>
+                       <button type="button" onClick={() => setTrailingConfig({ ...trailingConfig, trailType: 'percent' })} className={`py-1.5 text-xs rounded border transition-colors ${trailingConfig.trailType === 'percent' ? 'bg-primary-500/10 border-primary-500 text-primary-500' : 'border-dark-600 text-dark-400 hover:border-dark-500'}`}>Percent</button>
+                  </div>
+                  <input
+                     type="number"
+                     placeholder={trailingConfig.trailType === 'amount' ? "Distance ($)" : "Rate (%)"}
+                     value={trailingConfig.trailValue}
+                     onChange={(e) => setTrailingConfig({ ...trailingConfig, trailValue: e.target.value })}
+                     className="w-full bg-dark-900/50 border border-dark-600 rounded px-3 py-2 text-white text-sm focus:border-primary-500 focus:outline-none font-mono"
+                  />
+                  <input
+                     type="number"
+                     placeholder="Activation Price (Optional)"
+                     value={trailingConfig.activationPrice}
+                     onChange={(e) => setTrailingConfig({ ...trailingConfig, activationPrice: e.target.value })}
+                     className="w-full bg-dark-900/50 border border-dark-600 rounded px-3 py-2 text-white text-sm focus:border-primary-500 focus:outline-none font-mono"
+                  />
+               </div>
+            )}
 
-        {/* Size Input */}
-        <div>
-          <label className="block text-xs text-dark-400 mb-1">Size (BTC)</label>
-          <div className="relative">
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="0.00"
-              step="0.0001"
-              className="w-full bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm font-mono focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-        </div>
+             {/* Quantity Input */}
+             <div className="group">
+                 <div className="flex justify-between text-xs mb-1.5 px-1">
+                     <span className="text-dark-400">Size</span>
+                     <span className="text-dark-500">BTC</span>
+                 </div>
+                 <div className="relative">
+                     <input
+                         type="number"
+                         value={quantity}
+                         onChange={(e) => setQuantity(e.target.value)}
+                         placeholder="0.00"
+                         step="0.0001"
+                         className={`w-full bg-dark-800/50 border border-dark-600 rounded-lg px-4 py-3 text-white text-sm font-mono transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-opacity-50 ${isBuy ? 'focus:border-primary-500 focus:ring-primary-500/20' : 'focus:border-danger-500 focus:ring-danger-500/20'}`}
+                     />
+                 </div>
+                 {/* Percentage Buttons */}
+                 <div className="flex space-x-2 mt-2">
+                    {[0.25, 0.50, 0.75, 1.0].map((pct) => (
+                        <button
+                           key={pct}
+                           type="button"
+                           onClick={() => handlePercentClick(pct)}
+                           className="flex-1 py-1 text-[10px] font-medium bg-dark-800 border border-dark-700 hover:bg-dark-700 text-dark-400 hover:text-white rounded transition-colors"
+                        >
+                           {pct * 100}%
+                        </button>
+                    ))}
+                 </div>
+             </div>
 
-        {/* Leverage Slider */}
-        <div>
-          <div className="flex justify-between text-xs mb-2">
-            <span className="text-dark-400">Leverage</span>
-            <span className="text-white font-medium">{leverage}x</span>
-          </div>
-          <input
-            type="range"
-            min="1"
-            max="50"
-            value={leverage}
-            onChange={(e) => setLeverage(e.target.value)}
-            className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary-500"
-          />
-          <div className="flex justify-between text-xs text-dark-500 mt-1">
-            <span>1x</span>
-            <span>10x</span>
-            <span>25x</span>
-            <span>50x</span>
-          </div>
+             {/* Leverage Slider */}
+             <div className="space-y-3 pt-2">
+                 <div className="flex justify-between items-center">
+                     <span className="text-xs text-dark-400">Leverage</span>
+                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${isBuy ? 'bg-primary-500/10 text-primary-500' : 'bg-danger-500/10 text-danger-500'}`}>
+                         {leverage}x
+                     </span>
+                 </div>
+                 <div className="relative h-6 flex items-center">
+                     <input
+                         type="range"
+                         min="1"
+                         max="50"
+                         value={leverage}
+                         onChange={(e) => setLeverage(e.target.value)}
+                         className="w-full h-1.5 rounded-lg appearance-none cursor-pointer z-10"
+                         style={{
+                             background: `linear-gradient(to right, ${isBuy ? '#00C896' : '#FF4D4D'} 0%, ${isBuy ? '#00C896' : '#FF4D4D'} ${(parseInt(leverage)/50)*100}%, #334155 ${(parseInt(leverage)/50)*100}%, #334155 100%)`
+                         }}
+                     />
+                 </div>
+                 <div className="flex justify-between text-[10px] text-dark-500 font-mono">
+                     <span>1x</span>
+                     <span>10x</span>
+                     <span>25x</span>
+                     <span>50x</span>
+                 </div>
+             </div>
         </div>
 
         {/* Order Summary */}
-        <div className="bg-dark-800 rounded-lg p-3 space-y-2 text-xs">
-          <div className="flex justify-between">
-            <span className="text-dark-400">Notional Value</span>
-            <span className="text-white font-mono">${notional}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-dark-400">Required Margin</span>
-            <span className="text-white font-mono">${margin}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-dark-400">Available Balance</span>
-            <span className="text-white font-mono">${parseFloat(account.balance).toLocaleString()}</span>
-          </div>
+        <div className="bg-dark-800/40 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-dark-700/30 text-xs shadow-inner">
+            <div className="flex justify-between items-center">
+                <span className="text-dark-400">Notional</span>
+                <span className="text-white font-mono">${notional}</span>
+            </div>
+            <div className="flex justify-between items-center">
+                <span className="text-dark-400">Required Margin</span>
+                <span className="text-white font-mono border-b border-dashed border-dark-600 pb-0.5">${margin}</span>
+            </div>
+            <div className="flex justify-between items-center">
+                 <span className="text-dark-400">Available Balance</span>
+                 <span className="text-white font-mono">${parseFloat(account.balance).toLocaleString()}</span>
+            </div>
         </div>
 
-        {/* Error/Success Messages */}
-        {error && (
-          <div className="bg-danger-900/20 border border-danger-700/50 rounded-lg p-3">
-            <p className="text-xs text-danger-400">{error}</p>
-          </div>
-        )}
-        {success && (
-          <div className="bg-primary-900/20 border border-primary-700/50 rounded-lg p-3">
-            <p className="text-xs text-primary-400">{success}</p>
-          </div>
-        )}
+        {/* Messages */}
+        <div className="min-h-[20px]">
+           {error && (
+             <div className="animate-slide-up bg-danger-500/10 border border-danger-500/20 rounded-lg p-3 flex items-center gap-2">
+               <div className="w-1.5 h-1.5 rounded-full bg-danger-500"></div>
+               <p className="text-xs text-danger-400">{error}</p>
+             </div>
+           )}
+           {success && (
+             <div className="animate-slide-up bg-primary-500/10 border border-primary-500/20 rounded-lg p-3 flex items-center gap-2">
+               <div className="w-1.5 h-1.5 rounded-full bg-primary-500"></div>
+               <p className="text-xs text-primary-400 truncate">{success}</p>
+             </div>
+           )}
+        </div>
 
         {/* Submit Button */}
         <button
           type="submit"
           disabled={!connected || isSubmitting}
-          className={`btn-trade w-full py-3 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            orderSide === 'buy'
-              ? 'bg-primary-600 hover:bg-primary-500'
-              : 'bg-danger-600 hover:bg-danger-500'
+          className={`w-full py-3.5 rounded-lg text-sm font-bold text-white transition-all duration-300 shadow-lg transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex justify-center items-center gap-2 ${
+             isBuy
+               ? 'bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 shadow-glow-primary'
+               : 'bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-glow-danger'
           }`}
         >
           {!connected ? (
-            'Connect Wallet to Trade'
+             'Connect Wallet to Trade'
           ) : isSubmitting ? (
-            'Submitting...'
+             <>
+               <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+               </svg>
+               <span>Processing...</span>
+             </>
           ) : (
-            `${orderSide === 'buy' ? 'Long' : 'Short'} BTC`
+             <span>{isBuy ? 'Place Long Order' : 'Place Short Order'}</span>
           )}
         </button>
       </form>

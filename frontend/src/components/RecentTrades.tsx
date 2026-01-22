@@ -116,26 +116,29 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
   };
 
   return (
-    <div className="bg-dark-900 rounded-lg border border-dark-700 h-full flex flex-col">
+    <div className="glass-panel bg-dark-900/80 backdrop-blur-md rounded-lg border border-dark-700/50 h-full flex flex-col overflow-hidden shadow-xl ring-1 ring-white/5">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-dark-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-dark-700/50 bg-dark-900/50">
         <div className="flex items-center space-x-2">
           <h3 className="text-sm font-medium text-white">Recent Trades</h3>
           {wsConnected && (
-            <span className="flex items-center space-x-1 text-xs text-primary-400">
-              <span className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-pulse" />
-              <span>Live</span>
-            </span>
+            <div className="flex items-center px-2 py-0.5 rounded-full bg-primary-500/10 border border-primary-500/20 shadow-[0_0_8px_rgba(var(--primary-500),0.2)]">
+              <span className="relative flex h-2 w-2 mr-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-500"></span>
+              </span>
+              <span className="text-[10px] font-bold text-primary-400 uppercase tracking-wider">Live</span>
+            </div>
           )}
           {useHyperliquid && (
-            <span className="text-xs text-dark-500 bg-dark-800 px-1.5 py-0.5 rounded">HL</span>
+            <span className="text-[10px] font-bold text-dark-400 bg-dark-800/80 border border-dark-700 px-1.5 py-0.5 rounded backdrop-blur-sm">HL</span>
           )}
         </div>
-        <span className="text-xs text-dark-400">{marketId}</span>
+        <span className="text-xs text-dark-400 font-mono">{marketId}</span>
       </div>
 
       {/* Column Headers */}
-      <div className="grid grid-cols-3 px-4 py-2 text-xs text-dark-400 border-b border-dark-700">
+      <div className="grid grid-cols-3 px-4 py-2 text-xs text-dark-400 border-b border-dark-700/50 bg-dark-900/30 font-medium tracking-wide">
         <span>Price (USDC)</span>
         <span className="text-right">Size (BTC)</span>
         <span className="text-right">Time</span>
@@ -173,35 +176,42 @@ export function RecentTrades({ marketId = 'BTC-USDC', maxTrades = 50 }: RecentTr
       {/* Trades List */}
       {!isLoading && (
         <div ref={containerRef} className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="divide-y divide-dark-800">
-            {trades.map((trade) => (
-              <div
-                key={trade.id}
-                className={`grid grid-cols-3 px-4 py-1.5 text-xs transition-colors duration-300 ${
-                  newTradeId === trade.id
-                    ? trade.side === 'buy'
-                      ? 'bg-primary-500/20'
-                      : 'bg-danger-500/20'
-                    : 'hover:bg-dark-800'
-                }`}
-              >
-                <span
-                  className={`font-mono ${
-                    trade.side === 'buy' ? 'text-primary-400' : 'text-danger-400'
+          <div className="divide-y divide-dark-800/50">
+            {trades.map((trade) => {
+              const isLarge = parseFloat(trade.quantity) > 0.5; // Highlight significant trades
+              return (
+                <div
+                  key={trade.id}
+                  className={`grid grid-cols-3 px-4 py-2 text-xs transition-all duration-300 animate-slide-up ${
+                    newTradeId === trade.id
+                      ? trade.side === 'buy'
+                        ? 'bg-primary-500/20 shadow-[inset_0_0_10px_rgba(var(--primary-500),0.1)]'
+                        : 'bg-danger-500/20 shadow-[inset_0_0_10px_rgba(var(--danger-500),0.1)]'
+                      : isLarge
+                        ? 'bg-dark-800/40 hover:bg-dark-800/60'
+                        : 'hover:bg-dark-800/30'
                   }`}
                 >
-                  {formatPrice(trade.price)}
-                </span>
-                <span className="text-right text-white font-mono">{trade.quantity}</span>
-                <span className="text-right text-dark-400">{formatTime(trade.timestamp)}</span>
-              </div>
-            ))}
+                  <span
+                    className={`font-mono font-medium ${
+                      trade.side === 'buy' ? 'text-primary-500' : 'text-danger-500'
+                    }`}
+                  >
+                    {formatPrice(trade.price)}
+                  </span>
+                  <span className={`text-right font-mono ${isLarge ? 'text-white font-bold opacity-100' : 'text-dark-300 opacity-90'}`}>
+                    {trade.quantity}
+                  </span>
+                  <span className="text-right text-dark-500">{formatTime(trade.timestamp)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Footer Stats */}
-      <div className="px-4 py-2 border-t border-dark-700 text-xs text-dark-400">
+      <div className="px-4 py-2 border-t border-dark-700/50 text-xs text-dark-400 bg-dark-900/30">
         <div className="flex items-center justify-between">
           <span>Trades: {trades.length}</span>
           <span>Last: {trades[0] ? formatTime(trades[0].timestamp) : '--:--:--'}</span>

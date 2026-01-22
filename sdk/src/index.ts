@@ -47,6 +47,30 @@ export { default } from './client';
 export { WebSocketClient } from './websocket';
 export type { WebSocketConfig } from './websocket';
 
+// RiverPool client
+export { RiverpoolClient, createRiverpoolClient } from './riverpool';
+export type {
+  // RiverPool types
+  Pool,
+  Deposit,
+  Withdrawal,
+  PoolStats,
+  DDGuardState,
+  NAVHistory,
+  UserPoolBalance,
+  DepositEstimate,
+  WithdrawalEstimate,
+  DepositResponse,
+  WithdrawalRequestResponse,
+  WithdrawalClaimResponse,
+  WithdrawalCancelResponse,
+  RiverpoolClientConfig,
+  // Revenue types
+  RevenueStats,
+  RevenueRecord,
+  RevenueBreakdown,
+} from './riverpool';
+
 // Types
 export type {
   // Config

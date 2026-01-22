@@ -18,15 +18,17 @@ func main() {
 	port := flag.Int("port", 8080, "Server port")
 	mockMode := flag.Bool("mock", false, "Enable mock data mode (default: false for real mode)")
 	realMode := flag.Bool("real", false, "Enable real orderbook engine mode (uses MatchingEngineV2)")
+	noRateLimit := flag.Bool("no-rate-limit", false, "Disable rate limiting (for E2E testing)")
 	flag.Parse()
 
 	// Create configuration
 	config := &api.Config{
-		Host:         *host,
-		Port:         *port,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		MockMode:     *mockMode && !*realMode,
+		Host:             *host,
+		Port:             *port,
+		ReadTimeout:      30 * time.Second,
+		WriteTimeout:     30 * time.Second,
+		MockMode:         *mockMode && !*realMode,
+		DisableRateLimit: *noRateLimit,
 	}
 
 	var server *api.Server

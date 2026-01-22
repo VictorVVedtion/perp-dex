@@ -48,6 +48,7 @@ import (
 	orderbooktypes "github.com/openalpha/perp-dex/x/orderbook/types"
 	perpetualkeeper "github.com/openalpha/perp-dex/x/perpetual/keeper"
 	perpetualtypes "github.com/openalpha/perp-dex/x/perpetual/types"
+	riverpoolkeeper "github.com/openalpha/perp-dex/x/riverpool/keeper"
 )
 
 const (
@@ -99,6 +100,7 @@ type App struct {
 	OrderbookKeeper     *orderbookkeeper.Keeper
 	PerpetualKeeper     *perpetualkeeper.Keeper
 	ClearinghouseKeeper *clearinghousekeeper.Keeper
+	RiverpoolKeeper     *riverpoolkeeper.Keeper
 
 	// Module Manager
 	BasicModuleManager module.BasicManager
@@ -131,6 +133,7 @@ func NewApp(
 		"orderbook",
 		"perpetual",
 		"clearinghouse",
+		"riverpool",
 		consensusparamtypes.StoreKey,
 	)
 	tkeys := storetypes.NewTransientStoreKeys()
@@ -161,6 +164,7 @@ func NewApp(
 	maccPerms := map[string][]string{
 		authtypes.FeeCollectorName: nil,
 		"perpetual":                {authtypes.Minter, authtypes.Burner},
+		"riverpool":                {authtypes.Minter, authtypes.Burner},
 	}
 
 	// Create address codec
@@ -214,6 +218,16 @@ func NewApp(
 		logger,
 	)
 
+	// Initialize RiverPool keeper
+	app.RiverpoolKeeper = riverpoolkeeper.NewKeeper(
+		appCodec,
+		keys["riverpool"],
+		app.PerpetualKeeper,
+		app.BankKeeper,
+		"", // authority
+		logger,
+	)
+
 	// Register message types with the interface registry
 	orderbooktypes.RegisterInterfaces(interfaceRegistry)
 	perpetualtypes.RegisterInterfaces(interfaceRegistry)
@@ -259,7 +273,7 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 	totalStart := time.Now()
 
 	// Track individual operation timings
-	var oracleDuration, matchingDuration, liquidationDuration, fundingDuration, conditionalDuration time.Duration
+	var oracleDuration, matchingDuration, liquidationDuration, fundingDuration, conditionalDuration, riverpoolDuration time.Duration
 
 	// ===========================================
 	// Phase 1: Oracle Price Updates
@@ -310,6 +324,15 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 	conditionalDuration = time.Since(conditionalStart)
 
 	// ===========================================
+	// Phase 6: RiverPool Processing
+	// ===========================================
+	riverpoolStart := time.Now()
+	if err := app.RiverpoolKeeper.EndBlocker(ctx); err != nil {
+		logger.Error("riverpool endblock failed", "error", err)
+	}
+	riverpoolDuration = time.Since(riverpoolStart)
+
+	// ===========================================
 	// Performance Logging
 	// ===========================================
 	totalDuration := time.Since(totalStart)
@@ -323,6 +346,7 @@ func (app *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 		"liquidation_ms", liquidationDuration.Milliseconds(),
 		"funding_ms", fundingDuration.Milliseconds(),
 		"conditional_ms", conditionalDuration.Milliseconds(),
+		"riverpool_ms", riverpoolDuration.Milliseconds(),
 	)
 
 	// Log matching statistics if any markets were processed
@@ -438,6 +462,9 @@ func (app *App) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.
 
 	// Initialize default market
 	app.PerpetualKeeper.InitDefaultMarket(ctx)
+
+	// Initialize default RiverPool pools (Foundation LP and Main LP)
+	app.RiverpoolKeeper.InitDefaultPools(ctx)
 
 	// If validators are provided in request, use them
 	if len(req.Validators) > 0 {
