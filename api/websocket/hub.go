@@ -343,6 +343,83 @@ func (h *Hub) BroadcastOrder(userID string, order *OrderMessage) {
 	h.BroadcastToChannel(channel, msg)
 }
 
+// ============ RiverPool Broadcasts ============
+
+// BroadcastPoolUpdate broadcasts a pool update to subscribers
+func (h *Hub) BroadcastPoolUpdate(poolID string, update *PoolUpdateMessage) {
+	channel := "riverpool:pool:" + poolID
+	msg := &WSMessage{
+		Type:    "pool_update",
+		Channel: channel,
+		Data:    update,
+	}
+	h.BroadcastToChannel(channel, msg)
+
+	// Also broadcast to general pool updates channel
+	allPoolsChannel := "riverpool:pools"
+	h.BroadcastToChannel(allPoolsChannel, msg)
+}
+
+// BroadcastNAVUpdate broadcasts a NAV update to subscribers
+func (h *Hub) BroadcastNAVUpdate(poolID string, update *NAVUpdateMessage) {
+	channel := "riverpool:nav:" + poolID
+	msg := &WSMessage{
+		Type:    "nav_update",
+		Channel: channel,
+		Data:    update,
+	}
+	h.BroadcastToChannel(channel, msg)
+}
+
+// BroadcastDDGuardUpdate broadcasts a DDGuard level change
+func (h *Hub) BroadcastDDGuardUpdate(poolID string, update *DDGuardUpdateMessage) {
+	channel := "riverpool:ddguard:" + poolID
+	msg := &WSMessage{
+		Type:    "ddguard_update",
+		Channel: channel,
+		Data:    update,
+	}
+	h.BroadcastToChannel(channel, msg)
+
+	// Also broadcast to pool channel since this is important
+	poolChannel := "riverpool:pool:" + poolID
+	h.BroadcastToChannel(poolChannel, msg)
+}
+
+// BroadcastWithdrawalStatus broadcasts a withdrawal status update to the user
+func (h *Hub) BroadcastWithdrawalStatus(userID string, update *WithdrawalStatusMessage) {
+	// Send to user's withdrawal channel
+	userChannel := "riverpool:withdrawals:" + userID
+	msg := &WSMessage{
+		Type:    "withdrawal_status",
+		Channel: userChannel,
+		Data:    update,
+	}
+	h.BroadcastToChannel(userChannel, msg)
+}
+
+// BroadcastDepositConfirm broadcasts a deposit confirmation to the user
+func (h *Hub) BroadcastDepositConfirm(userID string, confirm *DepositConfirmMessage) {
+	userChannel := "riverpool:deposits:" + userID
+	msg := &WSMessage{
+		Type:    "deposit_confirm",
+		Channel: userChannel,
+		Data:    confirm,
+	}
+	h.BroadcastToChannel(userChannel, msg)
+}
+
+// BroadcastRevenueEvent broadcasts a revenue event to pool subscribers
+func (h *Hub) BroadcastRevenueEvent(poolID string, event *RevenueEventMessage) {
+	channel := "riverpool:revenue:" + poolID
+	msg := &WSMessage{
+		Type:    "revenue_event",
+		Channel: channel,
+		Data:    event,
+	}
+	h.BroadcastToChannel(channel, msg)
+}
+
 // ============ Message Types ============
 
 // WSMessage represents a WebSocket message
@@ -418,6 +495,82 @@ type OrderMessage struct {
 	FilledSize string `json:"filled_size"`
 	Status     string `json:"status"`
 	Timestamp  int64  `json:"timestamp"`
+}
+
+// ============ RiverPool Message Types ============
+
+// PoolUpdateMessage represents a pool update
+type PoolUpdateMessage struct {
+	PoolID          string `json:"pool_id"`
+	NAV             string `json:"nav"`
+	TotalDeposits   string `json:"total_deposits"`
+	TotalShares     string `json:"total_shares"`
+	HighWaterMark   string `json:"high_water_mark"`
+	CurrentDrawdown string `json:"current_drawdown"`
+	DDGuardLevel    string `json:"dd_guard_level"`
+	Status          string `json:"status"`
+	SeatsAvailable  int64  `json:"seats_available,omitempty"`
+	Timestamp       int64  `json:"timestamp"`
+}
+
+// NAVUpdateMessage represents a NAV update for a pool
+type NAVUpdateMessage struct {
+	PoolID          string `json:"pool_id"`
+	NAV             string `json:"nav"`
+	PreviousNAV     string `json:"previous_nav"`
+	Change          string `json:"change"`      // Absolute change
+	ChangePercent   string `json:"change_percent"` // Percentage change
+	TotalValue      string `json:"total_value"`
+	Timestamp       int64  `json:"timestamp"`
+}
+
+// DDGuardUpdateMessage represents a DDGuard level change
+type DDGuardUpdateMessage struct {
+	PoolID          string `json:"pool_id"`
+	Level           string `json:"level"`
+	PreviousLevel   string `json:"previous_level"`
+	DrawdownPercent string `json:"drawdown_percent"`
+	MaxExposure     string `json:"max_exposure"`
+	PeakNAV         string `json:"peak_nav"`
+	CurrentNAV      string `json:"current_nav"`
+	Timestamp       int64  `json:"timestamp"`
+}
+
+// WithdrawalStatusMessage represents a withdrawal status update
+type WithdrawalStatusMessage struct {
+	WithdrawalID   string `json:"withdrawal_id"`
+	PoolID         string `json:"pool_id"`
+	Withdrawer     string `json:"withdrawer"`
+	Status         string `json:"status"`
+	SharesRequested string `json:"shares_requested"`
+	SharesRedeemed string `json:"shares_redeemed"`
+	AmountReceived string `json:"amount_received"`
+	QueuePosition  string `json:"queue_position,omitempty"`
+	AvailableAt    int64  `json:"available_at"`
+	Timestamp      int64  `json:"timestamp"`
+}
+
+// DepositConfirmMessage represents a deposit confirmation
+type DepositConfirmMessage struct {
+	DepositID      string `json:"deposit_id"`
+	PoolID         string `json:"pool_id"`
+	Depositor      string `json:"depositor"`
+	Amount         string `json:"amount"`
+	SharesReceived string `json:"shares_received"`
+	NAVAtDeposit   string `json:"nav_at_deposit"`
+	UnlockAt       int64  `json:"unlock_at"`
+	Timestamp      int64  `json:"timestamp"`
+}
+
+// RevenueEventMessage represents a revenue event
+type RevenueEventMessage struct {
+	RecordID  string `json:"record_id"`
+	PoolID    string `json:"pool_id"`
+	Source    string `json:"source"` // spread, funding, liquidation, trading, fees
+	Amount    string `json:"amount"`
+	NAVImpact string `json:"nav_impact"`
+	MarketID  string `json:"market_id,omitempty"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // GetClientCount returns the number of connected clients

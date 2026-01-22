@@ -23,14 +23,16 @@ type Server struct {
 	mockMode   bool
 
 	// Services
-	orderService    types.OrderService
-	positionService types.PositionService
-	accountService  types.AccountService
+	orderService     types.OrderService
+	positionService  types.PositionService
+	accountService   types.AccountService
+	riverpoolService types.RiverpoolService
 
 	// Handlers
-	orderHandler    *handlers.OrderHandler
-	positionHandler *handlers.PositionHandler
-	accountHandler  *handlers.AccountHandler
+	orderHandler     *handlers.OrderHandler
+	positionHandler  *handlers.PositionHandler
+	accountHandler   *handlers.AccountHandler
+	riverpoolHandler *handlers.RiverpoolStandaloneHandler
 
 	// Rate limiter
 	rateLimiter *middleware.RateLimiter
@@ -38,11 +40,12 @@ type Server struct {
 
 // Config contains server configuration
 type Config struct {
-	Host         string
-	Port         int
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	MockMode     bool
+	Host             string
+	Port             int
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	MockMode         bool
+	DisableRateLimit bool // For testing purposes
 }
 
 // DefaultConfig returns default configuration
@@ -70,23 +73,28 @@ func NewServer(config *Config) *Server {
 	// Create mock service (default for now)
 	mockService := NewMockService()
 
+	// Create riverpool mock service
+	riverpoolService := NewMockRiverpoolService()
+
 	// Create rate limiter
 	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
 
 	s := &Server{
-		config:          config,
-		wsServer:        websocket.NewServer(wsConfig),
-		mockMode:        config.MockMode,
-		orderService:    mockService,
-		positionService: mockService,
-		accountService:  mockService,
-		rateLimiter:     rateLimiter,
+		config:           config,
+		wsServer:         websocket.NewServer(wsConfig),
+		mockMode:         config.MockMode,
+		orderService:     mockService,
+		positionService:  mockService,
+		accountService:   mockService,
+		riverpoolService: riverpoolService,
+		rateLimiter:      rateLimiter,
 	}
 
 	// Create handlers
 	s.orderHandler = handlers.NewOrderHandler(s.orderService)
 	s.positionHandler = handlers.NewPositionHandler(s.positionService)
 	s.accountHandler = handlers.NewAccountHandler(s.accountService)
+	s.riverpoolHandler = handlers.NewRiverpoolStandaloneHandler(s.riverpoolService)
 
 	return s
 }
@@ -103,20 +111,25 @@ func NewServerWithServices(config *Config, orderSvc types.OrderService, position
 	// Create rate limiter
 	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
 
+	// Create riverpool mock service
+	riverpoolService := NewMockRiverpoolService()
+
 	s := &Server{
-		config:          config,
-		wsServer:        websocket.NewServer(wsConfig),
-		mockMode:        config.MockMode,
-		orderService:    orderSvc,
-		positionService: positionSvc,
-		accountService:  accountSvc,
-		rateLimiter:     rateLimiter,
+		config:           config,
+		wsServer:         websocket.NewServer(wsConfig),
+		mockMode:         config.MockMode,
+		orderService:     orderSvc,
+		positionService:  positionSvc,
+		accountService:   accountSvc,
+		riverpoolService: riverpoolService,
+		rateLimiter:      rateLimiter,
 	}
 
 	// Create handlers
 	s.orderHandler = handlers.NewOrderHandler(s.orderService)
 	s.positionHandler = handlers.NewPositionHandler(s.positionService)
 	s.accountHandler = handlers.NewAccountHandler(s.accountService)
+	s.riverpoolHandler = handlers.NewRiverpoolStandaloneHandler(s.riverpoolService)
 
 	return s
 }
@@ -142,20 +155,25 @@ func NewServerWithRealService(config *Config) (*Server, error) {
 	// Create rate limiter
 	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
 
+	// Create riverpool mock service
+	riverpoolService := NewMockRiverpoolService()
+
 	s := &Server{
-		config:          config,
-		wsServer:        websocket.NewServer(wsConfig),
-		mockMode:        false,
-		orderService:    realService,
-		positionService: realService,
-		accountService:  realService,
-		rateLimiter:     rateLimiter,
+		config:           config,
+		wsServer:         websocket.NewServer(wsConfig),
+		mockMode:         false,
+		orderService:     realService,
+		positionService:  realService,
+		accountService:   realService,
+		riverpoolService: riverpoolService,
+		rateLimiter:      rateLimiter,
 	}
 
 	// Create handlers
 	s.orderHandler = handlers.NewOrderHandler(s.orderService)
 	s.positionHandler = handlers.NewPositionHandler(s.positionService)
 	s.accountHandler = handlers.NewAccountHandler(s.accountService)
+	s.riverpoolHandler = handlers.NewRiverpoolStandaloneHandler(s.riverpoolService)
 
 	return s, nil
 }
@@ -164,8 +182,9 @@ func NewServerWithRealService(config *Config) (*Server, error) {
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
-	// Health check
+	// Health check (support both /health and /v1/health for compatibility)
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/v1/health", s.handleHealth)
 
 	// Market endpoints (read-only)
 	mux.HandleFunc("/v1/markets", s.handleMarkets)
@@ -196,10 +215,33 @@ func (s *Server) Start() error {
 	// WebSocket
 	mux.HandleFunc("/ws", s.wsServer.GetHub().ServeWS)
 
+	// === RIVERPOOL ENDPOINTS ===
+	// Pool listing and details
+	mux.HandleFunc("/v1/riverpool/pools", s.riverpoolHandler.GetPools)
+	mux.HandleFunc("/v1/riverpool/pools/", s.handleRiverpoolPoolRoutes)
+
+	// Deposit and withdrawal operations
+	mux.HandleFunc("/v1/riverpool/deposit", s.riverpoolHandler.Deposit)
+	mux.HandleFunc("/v1/riverpool/withdrawal/request", s.riverpoolHandler.RequestWithdrawal)
+	mux.HandleFunc("/v1/riverpool/withdrawal/claim", s.riverpoolHandler.ClaimWithdrawal)
+	mux.HandleFunc("/v1/riverpool/withdrawals/pending", s.riverpoolHandler.GetPendingWithdrawals)
+
+	// User-specific endpoints
+	mux.HandleFunc("/v1/riverpool/user/", s.handleRiverpoolUserRoutes)
+
+	// Community pool management
+	mux.HandleFunc("/v1/riverpool/community/create", s.riverpoolHandler.CreateCommunityPool)
+	mux.HandleFunc("/v1/riverpool/community/", s.handleRiverpoolCommunityRoutes)
+
 	// Apply middleware chain: CORS -> RateLimit -> Handler
-	handler := corsMiddleware(
-		middleware.RateLimitMiddleware(s.rateLimiter)(mux),
-	)
+	var handler http.Handler
+	if s.config.DisableRateLimit {
+		handler = corsMiddleware(mux)
+	} else {
+		handler = corsMiddleware(
+			middleware.RateLimitMiddleware(s.rateLimiter)(mux),
+		)
+	}
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	s.httpServer = &http.Server{
@@ -219,7 +261,11 @@ func (s *Server) Start() error {
 
 	log.Printf("API server starting on %s (mock mode: %v)", addr, s.mockMode)
 	log.Printf("New endpoints enabled: /v1/orders, /v1/positions, /v1/account")
-	log.Printf("Rate limiting enabled: %d req/s per IP", 100)
+	if s.config.DisableRateLimit {
+		log.Printf("Rate limiting DISABLED (for testing)")
+	} else {
+		log.Printf("Rate limiting enabled: %d req/s per IP", 100)
+	}
 	return s.httpServer.ListenAndServe()
 }
 
@@ -426,4 +472,136 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// === RIVERPOOL ROUTE HANDLERS ===
+
+// handleRiverpoolPoolRoutes handles /v1/riverpool/pools/{poolId}/* endpoints
+func (s *Server) handleRiverpoolPoolRoutes(w http.ResponseWriter, r *http.Request) {
+	// Parse path: /v1/riverpool/pools/{poolId} or /v1/riverpool/pools/{poolId}/{endpoint}
+	path := r.URL.Path[len("/v1/riverpool/pools/"):]
+
+	// Extract pool ID and endpoint
+	poolID := path
+	endpoint := ""
+	for i, c := range path {
+		if c == '/' {
+			poolID = path[:i]
+			endpoint = path[i+1:]
+			break
+		}
+	}
+
+	if poolID == "" {
+		writeError(w, http.StatusBadRequest, "Pool ID required")
+		return
+	}
+
+	// Set pool ID in request for handler
+	r.Header.Set("X-Pool-ID", poolID)
+
+	switch endpoint {
+	case "":
+		s.riverpoolHandler.GetPool(w, r)
+	case "stats":
+		s.riverpoolHandler.GetPoolStats(w, r)
+	case "nav":
+		s.riverpoolHandler.GetNAVHistory(w, r)
+	case "ddguard":
+		s.riverpoolHandler.GetDDGuardState(w, r)
+	case "deposits":
+		s.riverpoolHandler.GetPoolDeposits(w, r)
+	case "withdrawals":
+		s.riverpoolHandler.GetPoolWithdrawals(w, r)
+	case "holders":
+		s.riverpoolHandler.GetPoolHolders(w, r)
+	case "positions":
+		s.riverpoolHandler.GetPoolPositions(w, r)
+	case "trades":
+		s.riverpoolHandler.GetPoolTrades(w, r)
+	case "revenue":
+		s.riverpoolHandler.GetPoolRevenue(w, r)
+	default:
+		writeError(w, http.StatusNotFound, "Endpoint not found")
+	}
+}
+
+// handleRiverpoolUserRoutes handles /v1/riverpool/user/{address}/* endpoints
+func (s *Server) handleRiverpoolUserRoutes(w http.ResponseWriter, r *http.Request) {
+	// Parse path: /v1/riverpool/user/{address} or /v1/riverpool/user/{address}/{endpoint}
+	path := r.URL.Path[len("/v1/riverpool/user/"):]
+
+	// Extract address and endpoint
+	address := path
+	endpoint := ""
+	for i, c := range path {
+		if c == '/' {
+			address = path[:i]
+			endpoint = path[i+1:]
+			break
+		}
+	}
+
+	if address == "" {
+		writeError(w, http.StatusBadRequest, "User address required")
+		return
+	}
+
+	// Set address in request for handler
+	r.Header.Set("X-User-Address", address)
+
+	switch endpoint {
+	case "", "deposits":
+		s.riverpoolHandler.GetUserDeposits(w, r)
+	case "withdrawals":
+		s.riverpoolHandler.GetUserWithdrawals(w, r)
+	case "pools":
+		s.riverpoolHandler.GetUserPools(w, r)
+	default:
+		writeError(w, http.StatusNotFound, "Endpoint not found")
+	}
+}
+
+// handleRiverpoolCommunityRoutes handles /v1/riverpool/community/{poolId}/* endpoints
+func (s *Server) handleRiverpoolCommunityRoutes(w http.ResponseWriter, r *http.Request) {
+	// Parse path: /v1/riverpool/community/{poolId}/{action}
+	path := r.URL.Path[len("/v1/riverpool/community/"):]
+
+	// Extract pool ID and action
+	poolID := path
+	action := ""
+	for i, c := range path {
+		if c == '/' {
+			poolID = path[:i]
+			action = path[i+1:]
+			break
+		}
+	}
+
+	if poolID == "" {
+		writeError(w, http.StatusBadRequest, "Pool ID required")
+		return
+	}
+
+	// Set pool ID in request for handler
+	r.Header.Set("X-Pool-ID", poolID)
+
+	switch action {
+	case "update":
+		s.riverpoolHandler.UpdateCommunityPool(w, r)
+	case "invite":
+		s.riverpoolHandler.GenerateInviteCode(w, r)
+	case "order":
+		s.riverpoolHandler.PlacePoolOrder(w, r)
+	case "close":
+		s.riverpoolHandler.ClosePoolPosition(w, r)
+	case "pause":
+		s.riverpoolHandler.PausePool(w, r)
+	case "resume":
+		s.riverpoolHandler.ResumePool(w, r)
+	case "close-pool":
+		s.riverpoolHandler.ClosePool(w, r)
+	default:
+		writeError(w, http.StatusNotFound, "Action not found")
+	}
 }

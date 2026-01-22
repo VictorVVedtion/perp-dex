@@ -1,0 +1,137 @@
+syntax = "proto3";
+package perpdex.riverpool.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/riverpool/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "amino/amino.proto";
+import "perpdex/riverpool/v1/types.proto";
+
+// Msg defines the riverpool Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // Deposit deposits funds into a pool
+  rpc Deposit(MsgDeposit) returns (MsgDepositResponse);
+
+  // RequestWithdrawal initiates a withdrawal request
+  rpc RequestWithdrawal(MsgRequestWithdrawal) returns (MsgRequestWithdrawalResponse);
+
+  // ClaimWithdrawal claims a completed withdrawal
+  rpc ClaimWithdrawal(MsgClaimWithdrawal) returns (MsgClaimWithdrawalResponse);
+
+  // CancelWithdrawal cancels a pending withdrawal request
+  rpc CancelWithdrawal(MsgCancelWithdrawal) returns (MsgCancelWithdrawalResponse);
+
+  // CreateCommunityPool creates a new community pool (Phase 3)
+  rpc CreateCommunityPool(MsgCreateCommunityPool) returns (MsgCreateCommunityPoolResponse);
+
+  // UpdateDDGuard manually triggers DDGuard check (admin only)
+  rpc UpdateDDGuard(MsgUpdateDDGuard) returns (MsgUpdateDDGuardResponse);
+}
+
+// MsgDeposit defines the Deposit request
+message MsgDeposit {
+  option (cosmos.msg.v1.signer) = "depositor";
+  option (amino.name) = "perpdex/riverpool/MsgDeposit";
+
+  string depositor = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string pool_id = 2;
+  string amount = 3;               // Amount in USDC
+  string invite_code = 4;          // Optional: for private pools
+}
+
+// MsgDepositResponse defines the Deposit response
+message MsgDepositResponse {
+  string deposit_id = 1;
+  string shares_received = 2;
+  string nav_at_deposit = 3;
+  int64 unlock_at = 4;             // 0 if no lock
+}
+
+// MsgRequestWithdrawal defines the RequestWithdrawal request
+message MsgRequestWithdrawal {
+  option (cosmos.msg.v1.signer) = "withdrawer";
+  option (amino.name) = "perpdex/riverpool/MsgRequestWithdrawal";
+
+  string withdrawer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string pool_id = 2;
+  string shares = 3;               // Shares to redeem
+}
+
+// MsgRequestWithdrawalResponse defines the RequestWithdrawal response
+message MsgRequestWithdrawalResponse {
+  string withdrawal_id = 1;
+  string shares_requested = 2;
+  string estimated_amount = 3;     // Estimated USDC amount
+  int64 available_at = 4;          // T+N timestamp
+  string queue_position = 5;       // Position in redemption queue
+}
+
+// MsgClaimWithdrawal defines the ClaimWithdrawal request
+message MsgClaimWithdrawal {
+  option (cosmos.msg.v1.signer) = "withdrawer";
+  option (amino.name) = "perpdex/riverpool/MsgClaimWithdrawal";
+
+  string withdrawer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string withdrawal_id = 2;
+}
+
+// MsgClaimWithdrawalResponse defines the ClaimWithdrawal response
+message MsgClaimWithdrawalResponse {
+  string amount_received = 1;
+  string shares_redeemed = 2;
+  string remaining_shares = 3;     // If partial redemption (pro-rata)
+}
+
+// MsgCancelWithdrawal defines the CancelWithdrawal request
+message MsgCancelWithdrawal {
+  option (cosmos.msg.v1.signer) = "withdrawer";
+  option (amino.name) = "perpdex/riverpool/MsgCancelWithdrawal";
+
+  string withdrawer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string withdrawal_id = 2;
+}
+
+// MsgCancelWithdrawalResponse defines the CancelWithdrawal response
+message MsgCancelWithdrawalResponse {
+  string shares_returned = 1;
+}
+
+// MsgCreateCommunityPool defines the CreateCommunityPool request (Phase 3)
+message MsgCreateCommunityPool {
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "perpdex/riverpool/MsgCreateCommunityPool";
+
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string name = 2;
+  string description = 3;
+  string min_deposit = 4;
+  string max_deposit = 5;          // 0 = unlimited
+  string owner_stake_amount = 6;   // Must be >= 5% of target TVL
+  string management_fee_rate = 7;  // e.g., "0.02" for 2%
+  string performance_fee_rate = 8; // e.g., "0.20" for 20%
+  bool is_private = 9;
+}
+
+// MsgCreateCommunityPoolResponse defines the CreateCommunityPool response
+message MsgCreateCommunityPoolResponse {
+  string pool_id = 1;
+  string invite_code = 2;          // Generated for private pools
+}
+
+// MsgUpdateDDGuard defines the UpdateDDGuard request (admin only)
+message MsgUpdateDDGuard {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "perpdex/riverpool/MsgUpdateDDGuard";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string pool_id = 2;
+}
+
+// MsgUpdateDDGuardResponse defines the UpdateDDGuard response
+message MsgUpdateDDGuardResponse {
+  DDGuardLevel new_level = 1;
+  string current_drawdown = 2;
+}

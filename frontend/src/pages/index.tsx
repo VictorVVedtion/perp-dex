@@ -7,6 +7,13 @@ import { TradeHistory } from '@/components/TradeHistory'
 import { useTradingStore } from '@/stores/tradingStore'
 import { config } from '@/lib/config'
 import { useEffect, useState } from 'react'
+import {
+  ChartBarIcon,
+  ClockIcon,
+  QueueListIcon,
+  ArrowsUpDownIcon,
+  InformationCircleIcon
+} from '@heroicons/react/24/outline'
 
 export default function TradePage() {
   const {
@@ -70,170 +77,222 @@ export default function TradePage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'history'>('positions')
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Market Stats */}
-      <div className="mb-6 bg-dark-900 rounded-lg border border-dark-700 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-6">
-            <div>
-              <div className="text-2xl font-bold text-white font-mono">
-                {currentPrice === '--' ? '--' : `$${parseFloat(currentPrice).toLocaleString()}`}
+    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 animate-fade-in">
+      {/* Market Stats Card */}
+      <div className="mb-6 relative group">
+        <div className="absolute -inset-[1px] bg-gradient-to-r from-primary-500/40 via-dark-700/50 to-danger-500/40 rounded-xl blur-[2px] group-hover:blur-[3px] transition-all duration-500" />
+        <div className="relative bg-dark-900/80 backdrop-blur-xl rounded-xl border border-white/5 p-4 overflow-hidden shadow-2xl">
+          {/* Decorative background element */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/5 blur-[80px] -mr-32 -mt-32 pointer-events-none" />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-8">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 bg-primary-500/10 rounded-lg flex items-center justify-center border border-primary-500/20">
+                  <ChartBarIcon className="w-6 h-6 text-primary-500" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold bg-gradient-to-br from-white to-dark-400 bg-clip-text text-transparent font-mono tracking-tight">
+                    {currentPrice === '--' ? '--' : `$${parseFloat(currentPrice).toLocaleString()}`}
+                  </div>
+                  <div className="flex items-center space-x-2 mt-0.5">
+                    <span className="text-xs font-bold text-dark-400 tracking-wider">BTC-USDC</span>
+                    {wsConnected && (
+                      <span className="flex items-center space-x-1.5 px-1.5 py-0.5 bg-primary-500/10 rounded-full border border-primary-500/20">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-500"></span>
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-primary-500 tracking-tighter">Live</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center space-x-2 mt-1">
-                <span className="text-xs text-dark-400">BTC-USDC</span>
-                {wsConnected && (
-                  <span className="flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-pulse" />
-                    <span className="text-xs text-primary-400">Live</span>
-                  </span>
-                )}
+
+              <div className="h-10 w-px bg-white/5" />
+
+              <div className="grid grid-cols-4 gap-8">
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-dark-500 tracking-widest mb-1">24h Change</div>
+                  <div className={`font-mono text-sm font-semibold ${changeFormatted.positive ? 'text-primary-500' : 'text-danger-500'}`}>
+                    {changeFormatted.text}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-dark-500 tracking-widest mb-1">24h High</div>
+                  <div className="text-white font-mono text-sm font-semibold">
+                    {high24h === '--' ? '--' : `$${parseFloat(high24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-dark-500 tracking-widest mb-1">24h Low</div>
+                  <div className="text-white font-mono text-sm font-semibold">
+                    {low24h === '--' ? '--' : `$${parseFloat(low24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-dark-500 tracking-widest mb-1">24h Volume</div>
+                  <div className="text-white font-mono text-sm font-semibold">{formatVolume(volume24h)}</div>
+                </div>
               </div>
             </div>
-            <div className="h-10 w-px bg-dark-700" />
-            <div>
-              <div className="text-xs text-dark-400">24h Change</div>
-              <div className={`font-mono ${changeFormatted.positive ? 'text-primary-400' : 'text-danger-400'}`}>
-                {changeFormatted.text}
+
+            <div className="flex items-center space-x-3">
+              <div className="px-3 py-1.5 bg-gradient-to-r from-primary-500/10 to-primary-500/5 text-primary-500 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-primary-500/20 shadow-glow-sm">
+                50x Max Leverage
               </div>
-            </div>
-            <div>
-              <div className="text-xs text-dark-400">24h High</div>
-              <div className="text-white font-mono">
-                {high24h === '--' ? '--' : `$${parseFloat(high24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-dark-400">24h Low</div>
-              <div className="text-white font-mono">
-                {low24h === '--' ? '--' : `$${parseFloat(low24h).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-dark-400">24h Volume</div>
-              <div className="text-white font-mono">{formatVolume(volume24h)}</div>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="px-2 py-1 bg-primary-500/20 text-primary-400 text-xs rounded">
-              50x Max Leverage
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Trading Layout */}
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-12 gap-5">
         {/* Order Book - Left */}
         <div className="col-span-2">
-          <div className="h-[600px]">
+          <div className="h-[650px] bg-dark-900/50 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden shadow-lg">
             <OrderBook />
           </div>
         </div>
 
         {/* TradingView Chart - Center */}
         <div className="col-span-5">
-          <div className="h-[600px]">
-            <Chart marketId="BTC-USDC" height={600} />
+          <div className="h-[650px] bg-dark-900/50 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden shadow-lg">
+            <Chart marketId="BTC-USDC" height={650} />
           </div>
         </div>
 
         {/* Recent Trades */}
         <div className="col-span-2">
-          <div className="h-[600px]">
+          <div className="h-[650px] bg-dark-900/50 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden shadow-lg">
             <RecentTrades marketId="BTC-USDC" maxTrades={50} />
           </div>
         </div>
 
         {/* Trade Form - Right */}
         <div className="col-span-3">
-          <TradeForm />
+          <div className="h-[650px] bg-dark-900/50 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden shadow-lg">
+            <TradeForm />
+          </div>
         </div>
       </div>
 
       {/* Bottom Panel with Tabs */}
-      <div className="mt-6">
-        {/* Tab Headers */}
-        <div className="flex items-center space-x-1 mb-4 border-b border-dark-700">
-          <button
-            onClick={() => setActiveTab('positions')}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'positions'
-                ? 'text-primary-400 border-primary-400'
-                : 'text-dark-400 border-transparent hover:text-white'
-            }`}
-          >
-            Positions {displayPositions.length > 0 && `(${displayPositions.length})`}
-          </button>
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'orders'
-                ? 'text-primary-400 border-primary-400'
-                : 'text-dark-400 border-transparent hover:text-white'
-            }`}
-          >
-            Open Orders
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'history'
-                ? 'text-primary-400 border-primary-400'
-                : 'text-dark-400 border-transparent hover:text-white'
-            }`}
-          >
-            Trade History
-          </button>
+      <div className="mt-8 bg-dark-900/40 backdrop-blur-md rounded-2xl border border-white/5 p-1 shadow-2xl">
+        <div className="flex items-center justify-between p-4 pb-0">
+          <div className="flex items-center space-x-1 relative">
+            <button
+              onClick={() => setActiveTab('positions')}
+              className={`flex items-center space-x-2 px-6 py-3 text-sm font-bold transition-all duration-300 relative z-10 ${
+                activeTab === 'positions' ? 'text-primary-500' : 'text-dark-400 hover:text-white'
+              }`}
+            >
+              <ChartBarIcon className="w-4 h-4" />
+              <span>Positions</span>
+              {displayPositions.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-primary-500/20 text-primary-500 text-[10px] rounded-md">
+                  {displayPositions.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`flex items-center space-x-2 px-6 py-3 text-sm font-bold transition-all duration-300 relative z-10 ${
+                activeTab === 'orders' ? 'text-primary-500' : 'text-dark-400 hover:text-white'
+              }`}
+            >
+              <QueueListIcon className="w-4 h-4" />
+              <span>Open Orders</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center space-x-2 px-6 py-3 text-sm font-bold transition-all duration-300 relative z-10 ${
+                activeTab === 'history' ? 'text-primary-500' : 'text-dark-400 hover:text-white'
+              }`}
+            >
+              <ClockIcon className="w-4 h-4" />
+              <span>Trade History</span>
+            </button>
+
+            {/* Sliding Underline Effect */}
+            <div
+              className="absolute bottom-0 h-0.5 bg-primary-500 transition-all duration-300 ease-in-out"
+              style={{
+                left: activeTab === 'positions' ? '0' : activeTab === 'orders' ? '120px' : '240px',
+                width: activeTab === 'positions' ? '120px' : activeTab === 'orders' ? '120px' : '120px'
+              }}
+            />
+          </div>
+
+          <div className="px-4 text-xs text-dark-500 flex items-center space-x-2">
+            <InformationCircleIcon className="w-4 h-4 text-dark-600" />
+            <span>Market execution is currently active</span>
+          </div>
         </div>
 
-        {/* Tab Content */}
-        {activeTab === 'positions' && (
-          displayPositions.length > 0 ? (
-            <div className="space-y-4">
-              {displayPositions.map((position, i) => (
-                <PositionCard
-                  key={position.marketId + position.side + i}
-                  position={position}
-                  markPrice={currentPrice}
-                  onClose={() => console.log('Close position:', position)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="bg-dark-900 rounded-lg border border-dark-700 p-8 text-center">
-              <p className="text-dark-400">No open positions</p>
-            </div>
-          )
-        )}
+        <div className="p-4 pt-6 min-h-[300px]">
+          {/* Tab Content */}
+          {activeTab === 'positions' && (
+            displayPositions.length > 0 ? (
+              <div className="space-y-4 animate-fade-in">
+                {displayPositions.map((position, i) => (
+                  <PositionCard
+                    key={position.marketId + position.side + i}
+                    position={position}
+                    markPrice={currentPrice}
+                    onClose={() => console.log('Close position:', position)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
+                <div className="w-16 h-16 bg-dark-800 rounded-full flex items-center justify-center mb-4 border border-white/5">
+                  <ArrowsUpDownIcon className="w-8 h-8 text-dark-600" />
+                </div>
+                <h3 className="text-white font-bold mb-1">No open positions</h3>
+                <p className="text-dark-500 text-sm">Your active positions will appear here</p>
+              </div>
+            )
+          )}
 
-        {activeTab === 'orders' && (
-          <div className="bg-dark-900 rounded-lg border border-dark-700">
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-dark-400 border-b border-dark-700">
-                  <th className="text-left px-4 py-3">Time</th>
-                  <th className="text-left px-4 py-3">Type</th>
-                  <th className="text-left px-4 py-3">Side</th>
-                  <th className="text-right px-4 py-3">Price</th>
-                  <th className="text-right px-4 py-3">Size</th>
-                  <th className="text-right px-4 py-3">Filled</th>
-                  <th className="text-right px-4 py-3">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-dark-400 text-sm">
-                    No open orders
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
+          {activeTab === 'orders' && (
+            <div className="overflow-hidden rounded-xl border border-white/5 animate-fade-in">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-dark-950/50 text-[10px] uppercase tracking-widest font-bold text-dark-500">
+                    <th className="text-left px-6 py-4">Time</th>
+                    <th className="text-left px-6 py-4">Type</th>
+                    <th className="text-left px-6 py-4">Side</th>
+                    <th className="text-right px-6 py-4">Price</th>
+                    <th className="text-right px-6 py-4">Size</th>
+                    <th className="text-right px-6 py-4">Filled</th>
+                    <th className="text-right px-6 py-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  <tr>
+                    <td colSpan={7} className="text-center py-20">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 bg-dark-800 rounded-full flex items-center justify-center mb-4 border border-white/5">
+                          <QueueListIcon className="w-8 h-8 text-dark-600" />
+                        </div>
+                        <h3 className="text-white font-bold mb-1">No open orders</h3>
+                        <p className="text-dark-500 text-sm">Your limit orders will appear here</p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
 
-        {activeTab === 'history' && (
-          <TradeHistory />
-        )}
+          {activeTab === 'history' && (
+            <div className="animate-fade-in">
+              <TradeHistory />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

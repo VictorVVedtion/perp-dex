@@ -1,0 +1,164 @@
+syntax = "proto3";
+package perpdex.riverpool.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/riverpool/types";
+
+// PoolType defines the type of liquidity pool
+enum PoolType {
+  POOL_TYPE_UNSPECIFIED = 0;
+  POOL_TYPE_FOUNDATION = 1;  // Foundation LP: 100 seats x $100K, 180-day lock
+  POOL_TYPE_MAIN = 2;        // Main LP: $100 min, no lock, T+4 redemption
+  POOL_TYPE_COMMUNITY = 3;   // Community Pool: user-created strategy pools
+}
+
+// PoolStatus defines the operational status of a pool
+enum PoolStatus {
+  POOL_STATUS_UNSPECIFIED = 0;
+  POOL_STATUS_ACTIVE = 1;      // Normal operation
+  POOL_STATUS_PAUSED = 2;      // Temporarily paused (DDGuard level 3)
+  POOL_STATUS_CLOSED = 3;      // Permanently closed
+}
+
+// DDGuardLevel defines the drawdown guard trigger levels
+enum DDGuardLevel {
+  DD_GUARD_LEVEL_UNSPECIFIED = 0;
+  DD_GUARD_LEVEL_NORMAL = 1;   // < 10% drawdown
+  DD_GUARD_LEVEL_WARNING = 2;  // >= 10% drawdown (alert)
+  DD_GUARD_LEVEL_REDUCE = 3;   // >= 15% drawdown (reduce exposure)
+  DD_GUARD_LEVEL_HALT = 4;     // >= 30% drawdown (halt trading)
+}
+
+// WithdrawalStatus defines the status of a withdrawal request
+enum WithdrawalStatus {
+  WITHDRAWAL_STATUS_UNSPECIFIED = 0;
+  WITHDRAWAL_STATUS_PENDING = 1;    // Waiting in queue
+  WITHDRAWAL_STATUS_PROCESSING = 2; // Being processed (pro-rata)
+  WITHDRAWAL_STATUS_COMPLETED = 3;  // Fully redeemed
+  WITHDRAWAL_STATUS_CANCELLED = 4;  // Cancelled by user
+}
+
+// Pool represents a liquidity pool
+message Pool {
+  string pool_id = 1;              // Unique pool identifier
+  PoolType pool_type = 2;          // Type of pool
+  string name = 3;                 // Display name
+  string description = 4;          // Pool description
+  PoolStatus status = 5;           // Current status
+
+  // Financial metrics
+  string total_deposits = 6;       // Total deposited amount (USDC)
+  string total_shares = 7;         // Total shares issued
+  string nav = 8;                  // Net Asset Value per share
+  string high_water_mark = 9;      // Historical peak NAV
+  string current_drawdown = 10;    // Current drawdown percentage
+
+  // DDGuard state
+  DDGuardLevel dd_guard_level = 11;
+
+  // Pool configuration
+  string min_deposit = 12;         // Minimum deposit amount
+  string max_deposit = 13;         // Maximum deposit amount (0 = unlimited)
+  int64 lock_period_days = 14;     // Lock period in days (0 = no lock)
+  int64 redemption_delay_days = 15; // T+N redemption delay
+  string daily_redemption_limit = 16; // Daily redemption limit percentage (e.g., "0.15" = 15%)
+
+  // Fee structure
+  string management_fee_rate = 17; // Annual management fee (e.g., "0.02" = 2%)
+  string performance_fee_rate = 18; // Performance fee (e.g., "0.20" = 20%)
+
+  // Community pool specific
+  string owner = 19;               // Owner address (for community pools)
+  string owner_stake = 20;         // Owner's stake percentage (min 5%)
+  bool is_private = 21;            // Private pool flag
+  string invite_code = 22;         // Invite code for private pools
+
+  // Timestamps
+  int64 created_at = 23;
+  int64 updated_at = 24;
+}
+
+// Deposit represents a user's deposit in a pool
+message Deposit {
+  string deposit_id = 1;           // Unique deposit identifier
+  string pool_id = 2;              // Pool identifier
+  string depositor = 3;            // Depositor address
+  string amount = 4;               // Deposited amount (USDC)
+  string shares = 5;               // Shares received
+  string nav_at_deposit = 6;       // NAV at time of deposit
+  int64 deposited_at = 7;          // Deposit timestamp
+  int64 unlock_at = 8;             // Unlock timestamp (for locked deposits)
+  string points_earned = 9;        // Points earned (for Foundation LP)
+}
+
+// Withdrawal represents a withdrawal request
+message Withdrawal {
+  string withdrawal_id = 1;        // Unique withdrawal identifier
+  string pool_id = 2;              // Pool identifier
+  string withdrawer = 3;           // Withdrawer address
+  string shares_requested = 4;     // Shares requested to redeem
+  string shares_redeemed = 5;      // Shares actually redeemed
+  string amount_received = 6;      // Amount received (USDC)
+  string nav_at_request = 7;       // NAV at time of request
+  WithdrawalStatus status = 8;     // Current status
+  int64 requested_at = 9;          // Request timestamp
+  int64 available_at = 10;         // Earliest redemption timestamp (T+N)
+  int64 completed_at = 11;         // Completion timestamp
+}
+
+// DDGuardState tracks the drawdown guard state for a pool
+message DDGuardState {
+  string pool_id = 1;
+  DDGuardLevel level = 2;
+  string peak_nav = 3;             // Peak NAV (high water mark)
+  string current_nav = 4;          // Current NAV
+  string drawdown_percent = 5;     // Current drawdown percentage
+  string max_exposure_limit = 6;   // Current max exposure limit
+  int64 triggered_at = 7;          // When current level was triggered
+  int64 last_checked_at = 8;       // Last check timestamp
+}
+
+// PoolStats aggregates pool statistics
+message PoolStats {
+  string pool_id = 1;
+  string total_value_locked = 2;   // TVL in USDC
+  string total_depositors = 3;     // Number of depositors
+  string total_pending_withdrawals = 4; // Pending withdrawal amount
+  string realized_pnl = 5;         // Total realized PnL
+  string unrealized_pnl = 6;       // Current unrealized PnL
+  string total_fees_collected = 7; // Total fees collected
+
+  // Performance metrics
+  string return_1d = 8;            // 1-day return
+  string return_7d = 9;            // 7-day return
+  string return_30d = 10;          // 30-day return
+  string return_all_time = 11;     // All-time return
+
+  int64 updated_at = 12;
+}
+
+// NAVHistory stores historical NAV data points
+message NAVHistory {
+  string pool_id = 1;
+  string nav = 2;
+  string total_value = 3;
+  int64 timestamp = 4;
+}
+
+// RevenueRecord tracks revenue sources for a pool
+message RevenueRecord {
+  string record_id = 1;
+  string pool_id = 2;
+  string source = 3;               // "spread", "funding", "liquidation"
+  string amount = 4;
+  string description = 5;
+  int64 timestamp = 6;
+}
+
+// GenesisState defines the riverpool module's genesis state
+message GenesisState {
+  repeated Pool pools = 1;
+  repeated Deposit deposits = 2;
+  repeated Withdrawal withdrawals = 3;
+  repeated DDGuardState dd_guard_states = 4;
+  repeated PoolStats pool_stats = 5;
+}

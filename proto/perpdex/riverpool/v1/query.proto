@@ -1,0 +1,233 @@
+syntax = "proto3";
+package perpdex.riverpool.v1;
+
+option go_package = "github.com/openalpha/perp-dex/x/riverpool/types";
+
+import "google/api/annotations.proto";
+import "perpdex/riverpool/v1/types.proto";
+
+// Query defines the riverpool Query service
+service Query {
+  // Pool returns a pool by ID
+  rpc Pool(QueryPoolRequest) returns (QueryPoolResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}";
+  }
+
+  // Pools returns all pools
+  rpc Pools(QueryPoolsRequest) returns (QueryPoolsResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pools";
+  }
+
+  // PoolsByType returns pools filtered by type
+  rpc PoolsByType(QueryPoolsByTypeRequest) returns (QueryPoolsByTypeResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pools/type/{pool_type}";
+  }
+
+  // UserDeposits returns all deposits for a user
+  rpc UserDeposits(QueryUserDepositsRequest) returns (QueryUserDepositsResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/user/{user}/deposits";
+  }
+
+  // PoolDeposits returns all deposits in a pool
+  rpc PoolDeposits(QueryPoolDepositsRequest) returns (QueryPoolDepositsResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/deposits";
+  }
+
+  // UserWithdrawals returns all withdrawals for a user
+  rpc UserWithdrawals(QueryUserWithdrawalsRequest) returns (QueryUserWithdrawalsResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/user/{user}/withdrawals";
+  }
+
+  // PendingWithdrawals returns all pending withdrawals for a pool
+  rpc PendingWithdrawals(QueryPendingWithdrawalsRequest) returns (QueryPendingWithdrawalsResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/withdrawals/pending";
+  }
+
+  // PoolStats returns statistics for a pool
+  rpc PoolStats(QueryPoolStatsRequest) returns (QueryPoolStatsResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/stats";
+  }
+
+  // NAVHistory returns historical NAV data for a pool
+  rpc NAVHistory(QueryNAVHistoryRequest) returns (QueryNAVHistoryResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/nav/history";
+  }
+
+  // DDGuardState returns the DDGuard state for a pool
+  rpc DDGuardState(QueryDDGuardStateRequest) returns (QueryDDGuardStateResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/ddguard";
+  }
+
+  // UserPoolBalance returns user's balance and shares in a pool
+  rpc UserPoolBalance(QueryUserPoolBalanceRequest) returns (QueryUserPoolBalanceResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/user/{user}/balance";
+  }
+
+  // EstimateDeposit estimates shares for a given deposit amount
+  rpc EstimateDeposit(QueryEstimateDepositRequest) returns (QueryEstimateDepositResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/estimate/deposit";
+  }
+
+  // EstimateWithdrawal estimates amount for a given share redemption
+  rpc EstimateWithdrawal(QueryEstimateWithdrawalRequest) returns (QueryEstimateWithdrawalResponse) {
+    option (google.api.http).get = "/perpdex/riverpool/v1/pool/{pool_id}/estimate/withdrawal";
+  }
+}
+
+// QueryPoolRequest is the request for Pool query
+message QueryPoolRequest {
+  string pool_id = 1;
+}
+
+// QueryPoolResponse is the response for Pool query
+message QueryPoolResponse {
+  Pool pool = 1;
+}
+
+// QueryPoolsRequest is the request for Pools query
+message QueryPoolsRequest {
+  // Pagination
+  uint64 offset = 1;
+  uint64 limit = 2;
+}
+
+// QueryPoolsResponse is the response for Pools query
+message QueryPoolsResponse {
+  repeated Pool pools = 1;
+  uint64 total = 2;
+}
+
+// QueryPoolsByTypeRequest is the request for PoolsByType query
+message QueryPoolsByTypeRequest {
+  PoolType pool_type = 1;
+}
+
+// QueryPoolsByTypeResponse is the response for PoolsByType query
+message QueryPoolsByTypeResponse {
+  repeated Pool pools = 1;
+}
+
+// QueryUserDepositsRequest is the request for UserDeposits query
+message QueryUserDepositsRequest {
+  string user = 1;
+}
+
+// QueryUserDepositsResponse is the response for UserDeposits query
+message QueryUserDepositsResponse {
+  repeated Deposit deposits = 1;
+  string total_value = 2;          // Total value across all deposits
+}
+
+// QueryPoolDepositsRequest is the request for PoolDeposits query
+message QueryPoolDepositsRequest {
+  string pool_id = 1;
+  uint64 offset = 2;
+  uint64 limit = 3;
+}
+
+// QueryPoolDepositsResponse is the response for PoolDeposits query
+message QueryPoolDepositsResponse {
+  repeated Deposit deposits = 1;
+  uint64 total = 2;
+}
+
+// QueryUserWithdrawalsRequest is the request for UserWithdrawals query
+message QueryUserWithdrawalsRequest {
+  string user = 1;
+}
+
+// QueryUserWithdrawalsResponse is the response for UserWithdrawals query
+message QueryUserWithdrawalsResponse {
+  repeated Withdrawal withdrawals = 1;
+}
+
+// QueryPendingWithdrawalsRequest is the request for PendingWithdrawals query
+message QueryPendingWithdrawalsRequest {
+  string pool_id = 1;
+}
+
+// QueryPendingWithdrawalsResponse is the response for PendingWithdrawals query
+message QueryPendingWithdrawalsResponse {
+  repeated Withdrawal withdrawals = 1;
+  string total_pending_shares = 2;
+  string total_pending_value = 3;
+  string daily_limit_remaining = 4;
+}
+
+// QueryPoolStatsRequest is the request for PoolStats query
+message QueryPoolStatsRequest {
+  string pool_id = 1;
+}
+
+// QueryPoolStatsResponse is the response for PoolStats query
+message QueryPoolStatsResponse {
+  PoolStats stats = 1;
+}
+
+// QueryNAVHistoryRequest is the request for NAVHistory query
+message QueryNAVHistoryRequest {
+  string pool_id = 1;
+  int64 from_timestamp = 2;        // Optional: filter start
+  int64 to_timestamp = 3;          // Optional: filter end
+  string interval = 4;             // "1h", "1d", "1w"
+}
+
+// QueryNAVHistoryResponse is the response for NAVHistory query
+message QueryNAVHistoryResponse {
+  repeated NAVHistory history = 1;
+}
+
+// QueryDDGuardStateRequest is the request for DDGuardState query
+message QueryDDGuardStateRequest {
+  string pool_id = 1;
+}
+
+// QueryDDGuardStateResponse is the response for DDGuardState query
+message QueryDDGuardStateResponse {
+  DDGuardState state = 1;
+}
+
+// QueryUserPoolBalanceRequest is the request for UserPoolBalance query
+message QueryUserPoolBalanceRequest {
+  string pool_id = 1;
+  string user = 2;
+}
+
+// QueryUserPoolBalanceResponse is the response for UserPoolBalance query
+message QueryUserPoolBalanceResponse {
+  string shares = 1;
+  string value = 2;                // Current value in USDC
+  string cost_basis = 3;           // Original deposit amount
+  string unrealized_pnl = 4;       // value - cost_basis
+  string pnl_percent = 5;          // PnL percentage
+  int64 unlock_at = 6;             // 0 if unlocked
+  bool can_withdraw = 7;
+}
+
+// QueryEstimateDepositRequest is the request for EstimateDeposit query
+message QueryEstimateDepositRequest {
+  string pool_id = 1;
+  string amount = 2;
+}
+
+// QueryEstimateDepositResponse is the response for EstimateDeposit query
+message QueryEstimateDepositResponse {
+  string shares = 1;
+  string nav = 2;
+  string share_price = 3;
+}
+
+// QueryEstimateWithdrawalRequest is the request for EstimateWithdrawal query
+message QueryEstimateWithdrawalRequest {
+  string pool_id = 1;
+  string shares = 2;
+}
+
+// QueryEstimateWithdrawalResponse is the response for EstimateWithdrawal query
+message QueryEstimateWithdrawalResponse {
+  string amount = 1;
+  string nav = 2;
+  int64 available_at = 3;          // T+N timestamp
+  string queue_position = 4;       // Estimated queue position
+  bool may_be_prorated = 5;        // True if daily limit might apply
+}

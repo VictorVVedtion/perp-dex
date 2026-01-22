@@ -371,25 +371,24 @@ func TestWebSocket_MessageLatencyV2(t *testing.T) {
 	lastTime := time.Now()
 	messageCount := 0
 
-	timeout := time.After(10 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 
-	for messageCount < 10 {
-		select {
-		case <-timeout:
-			break
-		default:
-			_, err := client.Receive(2 * time.Second)
-			if err != nil {
-				continue
-			}
-
-			now := time.Now()
-			if messageCount > 0 {
-				latencies = append(latencies, now.Sub(lastTime))
-			}
-			lastTime = now
-			messageCount++
+	for messageCount < 10 && time.Now().Before(deadline) {
+		_, err := client.Receive(1 * time.Second)
+		if err != nil {
+			continue
 		}
+
+		now := time.Now()
+		if messageCount > 0 {
+			latencies = append(latencies, now.Sub(lastTime))
+		}
+		lastTime = now
+		messageCount++
+	}
+
+	if messageCount < 10 {
+		t.Logf("Received only %d messages within timeout (expected 10)", messageCount)
 	}
 
 	if len(latencies) > 0 {
@@ -399,6 +398,8 @@ func TestWebSocket_MessageLatencyV2(t *testing.T) {
 		}
 		avg := total / time.Duration(len(latencies))
 		t.Logf("Average message interval: %v", avg)
+	} else {
+		t.Log("No latencies measured (received 0 or 1 messages)")
 	}
 }
 

@@ -136,6 +136,13 @@ func (c *HTTPClient) doRequest(method, path string, body interface{}) *RequestRe
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		// Try to parse as raw data
 		apiResp.Data = respBody
+	} else if apiResp.Data == nil {
+		// If unmarshal succeeded but Data is nil, it means the response
+		// is not in the wrapped {success, data} format.
+		// Store the entire response as raw data for handlers that return
+		// data directly (like RiverPool endpoints)
+		apiResp.Data = respBody
+		apiResp.Success = true // Assume success if status is 2xx
 	}
 	result.Response = &apiResp
 
@@ -370,14 +377,14 @@ func CreateTestAccount(client *HTTPClient, balance string) (*TestAccount, error)
 
 // Order represents a trading order
 type Order struct {
-	OrderID   string `json:"orderId"`
-	MarketID  string `json:"marketId"`
+	OrderID   string `json:"order_id,omitempty"`
+	MarketID  string `json:"market_id"`
 	Trader    string `json:"trader"`
 	Side      string `json:"side"` // "buy" or "sell"
-	OrderType string `json:"orderType"` // "limit" or "market"
+	OrderType string `json:"type"` // "limit" or "market"
 	Price     string `json:"price"`
 	Quantity  string `json:"quantity"`
-	Leverage  string `json:"leverage"`
+	Leverage  string `json:"leverage,omitempty"`
 }
 
 // PlaceOrder places an order via API
