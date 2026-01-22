@@ -10,6 +10,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	perpetualtypes "github.com/openalpha/perp-dex/x/perpetual/types"
 	"github.com/openalpha/perp-dex/x/riverpool/types"
 )
 
@@ -28,7 +29,7 @@ var (
 
 // PerpetualKeeper defines the expected interface for perpetual module
 type PerpetualKeeper interface {
-	GetPrice(ctx sdk.Context, marketID string) interface{}
+	GetPrice(ctx sdk.Context, marketID string) *perpetualtypes.PriceInfo
 }
 
 // BankKeeper defines the expected interface for the bank module

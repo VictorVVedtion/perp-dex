@@ -1,0 +1,49 @@
+{
+  "config": {
+    "api_url": "http://localhost:8080",
+    "concurrency": 200,
+    "market": "BTC-USDC",
+    "orders_per_side": 10000,
+    "price": "50000",
+    "quantity": "0.01"
+  },
+  "latency_all": {
+    "avg_us": 12283,
+    "max_us": 277405,
+    "min_us": 109,
+    "p50_us": 9528,
+    "p90_us": 12756,
+    "p95_us": 14884,
+    "p99_us": 86052
+  },
+  "latency_buy": {
+    "avg_us": 12221,
+    "max_us": 273626,
+    "min_us": 116,
+    "p99_us": 81415
+  },
+  "latency_matched": {
+    "avg_us": 12315,
+    "max_us": 273626,
+    "min_us": 116,
+    "p99_us": 84911
+  },
+  "latency_sell": {
+    "avg_us": 12345,
+    "max_us": 277405,
+    "min_us": 109,
+    "p99_us": 187276
+  },
+  "summary": {
+    "duration_ms": 1243,
+    "failed_orders": 0,
+    "match_rate": 50,
+    "success_orders": 20000,
+    "success_rate": 100,
+    "throughput_per_sec": 16077.711489864569,
+    "total_matched": 10000,
+    "total_orders": 20000,
+    "total_trades": 10000
+  },
+  "timestamp": "2026-01-22T04:38:45Z"
+}
