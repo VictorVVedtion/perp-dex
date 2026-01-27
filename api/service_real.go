@@ -39,12 +39,14 @@ type RealService struct {
 // for standalone API server usage (without full chain integration)
 type SimplePerpetualKeeper struct {
 	markets map[string]*obkeeper.Market
+	oracle  *HyperliquidOracle
 	mu      sync.RWMutex
 }
 
 func NewSimplePerpetualKeeper() *SimplePerpetualKeeper {
 	pk := &SimplePerpetualKeeper{
 		markets: make(map[string]*obkeeper.Market),
+		oracle:  NewHyperliquidOracle(), // Use Hyperliquid Oracle for real-time prices
 	}
 	// Initialize default markets
 	pk.initDefaultMarkets()
@@ -83,16 +85,14 @@ func (pk *SimplePerpetualKeeper) GetMarket(ctx sdk.Context, marketID string) *ob
 }
 
 func (pk *SimplePerpetualKeeper) GetMarkPrice(ctx sdk.Context, marketID string) (math.LegacyDec, bool) {
-	// Return a default mark price - in production this would come from oracle
-	basePrices := map[string]string{
-		"BTC-USDC": "97500",
-		"ETH-USDC": "3350",
-		"SOL-USDC": "185",
+	// Use Hyperliquid Oracle for real-time prices
+	if pk.oracle != nil {
+		price, err := pk.oracle.GetPrice(marketID)
+		if err == nil && !price.IsZero() {
+			return price, true
+		}
 	}
-	if priceStr, ok := basePrices[marketID]; ok {
-		price, _ := math.LegacyNewDecFromStr(priceStr)
-		return price, true
-	}
+	// No fallback - return zero if Oracle fails
 	return math.LegacyZeroDec(), false
 }
 

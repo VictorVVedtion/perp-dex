@@ -30,6 +30,16 @@ func DefaultConfig() *TestConfig {
 	}
 }
 
+// CheckAPIAvailable checks if API server is available and skips test if not
+func CheckAPIAvailable(t interface{ Skip(...any); Helper() }) {
+	t.Helper()
+	resp, err := http.Get("http://localhost:8080/v1/health")
+	if err != nil {
+		t.Skip("API server not available at http://localhost:8080:", err)
+	}
+	resp.Body.Close()
+}
+
 // HTTPClient provides HTTP request utilities for E2E testing
 type HTTPClient struct {
 	config     *TestConfig

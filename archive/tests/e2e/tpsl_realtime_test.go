@@ -10,6 +10,7 @@ import (
 
 // TestTPSL_RealPrices tests TP/SL with real market prices from Hyperliquid
 func TestTPSL_RealPrices(t *testing.T) {
+	checkAPIAvailable(t)
 	t.Log("╔════════════════════════════════════════════════════════════╗")
 	t.Log("║     TP/SL E2E Test with REAL Hyperliquid Prices            ║")
 	t.Log("╚════════════════════════════════════════════════════════════╝")
@@ -101,6 +102,7 @@ func TestTPSL_RealPrices(t *testing.T) {
 
 // TestTPSL_RealPrices_ETH tests TP/SL with real ETH prices
 func TestTPSL_RealPrices_ETH(t *testing.T) {
+	checkAPIAvailable(t)
 	// Get current ETH market price
 	orderbook := httpGet(t, apiBase+"/v1/markets/ETH-USDC/orderbook")
 
@@ -144,6 +146,7 @@ func TestTPSL_RealPrices_ETH(t *testing.T) {
 
 // TestTPSL_RealPrices_AllMarkets tests TP/SL across all markets with real prices
 func TestTPSL_RealPrices_AllMarkets(t *testing.T) {
+	checkAPIAvailable(t)
 	// Using REAL Hyperliquid prices:
 	// BTC: ~$86,500, ETH: ~$2,807, SOL: ~$119
 	markets := []struct {

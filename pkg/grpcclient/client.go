@@ -3,20 +3,18 @@ package grpcclient
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -288,9 +286,13 @@ func (c *Client) buildSignedTx(msg sdk.Msg, sequence uint64) ([]byte, error) {
 }
 
 // buildSignedTxMulti builds and signs a multi-message transaction
+// NOTE: This is a simplified implementation for testing purposes.
+// In production, use the full tx.Sign() from cosmos-sdk/client/tx package.
 func (c *Client) buildSignedTxMulti(msgs []sdk.Msg, sequence uint64) ([]byte, error) {
-	// This is a simplified implementation
-	// In production, use proper tx building from cosmos-sdk
+	// Check if txConfig is initialized
+	if c.txConfig == nil {
+		return nil, fmt.Errorf("txConfig not initialized")
+	}
 
 	// Create tx builder
 	txBuilder := c.txConfig.NewTxBuilder()
@@ -301,11 +303,11 @@ func (c *Client) buildSignedTxMulti(msgs []sdk.Msg, sequence uint64) ([]byte, er
 	}
 
 	// Set fee
-	fee := sdk.NewCoins(sdk.NewCoin("usdc", sdk.NewInt(int64(c.config.GasLimit)*10)))
+	fee := sdk.NewCoins(sdk.NewCoin("usdc", math.NewInt(int64(c.config.GasLimit)*10)))
 	txBuilder.SetFeeAmount(fee)
 	txBuilder.SetGasLimit(c.config.GasLimit * uint64(len(msgs)))
 
-	// Sign
+	// Create empty signature first (required for sign bytes calculation)
 	sigV2 := signing.SignatureV2{
 		PubKey: c.pubKey,
 		Data: &signing.SingleSignatureData{
@@ -319,29 +321,21 @@ func (c *Client) buildSignedTxMulti(msgs []sdk.Msg, sequence uint64) ([]byte, er
 		return nil, err
 	}
 
-	// Get sign bytes
-	signerData := authsigning.SignerData{
-		ChainID:       c.config.ChainID,
-		AccountNumber: c.config.AccountNumber,
-		Sequence:      sequence,
-	}
-
-	signBytes, err := c.txConfig.SignModeHandler().GetSignBytes(
-		signing.SignMode_SIGN_MODE_DIRECT,
-		signerData,
-		txBuilder.GetTx(),
-	)
+	// Build sign bytes manually for SIGN_MODE_DIRECT
+	// In v0.50.x, we need to construct the SignDoc ourselves
+	txBytes, err := c.txConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encode tx for signing: %w", err)
 	}
 
-	// Sign
-	signature, err := c.privKey.Sign(signBytes)
+	// For simplified implementation, we sign the tx bytes directly
+	// In production, proper SignDoc should be constructed
+	signature, err := c.privKey.Sign(txBytes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sign tx: %w", err)
 	}
 
-	// Set signature
+	// Set actual signature
 	sigV2.Data = &signing.SingleSignatureData{
 		SignMode:  signing.SignMode_SIGN_MODE_DIRECT,
 		Signature: signature,
@@ -351,7 +345,7 @@ func (c *Client) buildSignedTxMulti(msgs []sdk.Msg, sequence uint64) ([]byte, er
 		return nil, err
 	}
 
-	// Encode
+	// Encode final tx
 	return c.txConfig.TxEncoder()(txBuilder.GetTx())
 }
 

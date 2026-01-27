@@ -36,6 +36,9 @@ type Server struct {
 
 	// Rate limiter
 	rateLimiter *middleware.RateLimiter
+
+	// Oracle for real-time prices (Hyperliquid)
+	oracle *HyperliquidOracle
 }
 
 // Config contains server configuration
@@ -79,6 +82,9 @@ func NewServer(config *Config) *Server {
 	// Create rate limiter
 	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
 
+	// Create Hyperliquid Oracle for real-time prices
+	oracle := NewHyperliquidOracle()
+
 	s := &Server{
 		config:           config,
 		wsServer:         websocket.NewServer(wsConfig),
@@ -88,6 +94,7 @@ func NewServer(config *Config) *Server {
 		accountService:   mockService,
 		riverpoolService: riverpoolService,
 		rateLimiter:      rateLimiter,
+		oracle:           oracle,
 	}
 
 	// Create handlers
@@ -114,6 +121,9 @@ func NewServerWithServices(config *Config, orderSvc types.OrderService, position
 	// Create riverpool mock service
 	riverpoolService := NewMockRiverpoolService()
 
+	// Create Hyperliquid Oracle for real-time prices
+	oracle := NewHyperliquidOracle()
+
 	s := &Server{
 		config:           config,
 		wsServer:         websocket.NewServer(wsConfig),
@@ -123,6 +133,7 @@ func NewServerWithServices(config *Config, orderSvc types.OrderService, position
 		accountService:   accountSvc,
 		riverpoolService: riverpoolService,
 		rateLimiter:      rateLimiter,
+		oracle:           oracle,
 	}
 
 	// Create handlers
@@ -158,6 +169,9 @@ func NewServerWithRealService(config *Config) (*Server, error) {
 	// Create riverpool mock service
 	riverpoolService := NewMockRiverpoolService()
 
+	// Create Hyperliquid Oracle for real-time prices
+	oracle := NewHyperliquidOracle()
+
 	s := &Server{
 		config:           config,
 		wsServer:         websocket.NewServer(wsConfig),
@@ -167,6 +181,7 @@ func NewServerWithRealService(config *Config) (*Server, error) {
 		accountService:   realService,
 		riverpoolService: riverpoolService,
 		rateLimiter:      rateLimiter,
+		oracle:           oracle,
 	}
 
 	// Create handlers
@@ -254,12 +269,12 @@ func (s *Server) Start() error {
 	// Start WebSocket hub
 	go s.wsServer.GetHub().Run()
 
-	// Start mock data broadcaster if in mock mode
-	if s.mockMode {
-		go s.startMockDataBroadcaster()
-	}
+	// Start real-time data broadcaster (uses Hyperliquid Oracle)
+	// Now broadcasts real data in all modes
+	go s.startRealDataBroadcaster()
 
 	log.Printf("API server starting on %s (mock mode: %v)", addr, s.mockMode)
+	log.Printf("Using Hyperliquid Oracle for real-time prices")
 	log.Printf("New endpoints enabled: /v1/orders, /v1/positions, /v1/account")
 	if s.config.DisableRateLimit {
 		log.Printf("Rate limiting DISABLED (for testing)")

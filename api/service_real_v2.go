@@ -74,6 +74,55 @@ type PriceCache struct {
 	Timestamp time.Time
 }
 
+// OrderbookLevel represents a single price level in the orderbook
+type OrderbookLevel struct {
+	Price    string `json:"price"`
+	Quantity string `json:"quantity"`
+}
+
+// OrderbookData represents L2 orderbook data
+type OrderbookData struct {
+	MarketID  string           `json:"market_id"`
+	Bids      []OrderbookLevel `json:"bids"`
+	Asks      []OrderbookLevel `json:"asks"`
+	Timestamp int64            `json:"timestamp"`
+}
+
+// TradeData represents a single trade
+type TradeData struct {
+	TradeID   string `json:"trade_id"`
+	MarketID  string `json:"market_id"`
+	Price     string `json:"price"`
+	Quantity  string `json:"quantity"`
+	Side      string `json:"side"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// KlineData represents a single candlestick
+type KlineData struct {
+	Time   int64   `json:"time"`
+	Open   float64 `json:"open"`
+	High   float64 `json:"high"`
+	Low    float64 `json:"low"`
+	Close  float64 `json:"close"`
+	Volume float64 `json:"volume"`
+}
+
+// TickerData represents complete ticker information
+type TickerData struct {
+	MarketID    string `json:"market_id"`
+	MarkPrice   string `json:"mark_price"`
+	IndexPrice  string `json:"index_price"`
+	LastPrice   string `json:"last_price"`
+	High24h     string `json:"high_24h"`
+	Low24h      string `json:"low_24h"`
+	Volume24h   string `json:"volume_24h"`
+	Change24h   string `json:"change_24h"`
+	FundingRate string `json:"funding_rate"`
+	NextFunding int64  `json:"next_funding"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
 // NewHyperliquidOracle creates a new oracle instance
 func NewHyperliquidOracle() *HyperliquidOracle {
 	return &HyperliquidOracle{
@@ -138,27 +187,54 @@ func (o *HyperliquidOracle) GetPrice(marketID string) (math.LegacyDec, error) {
 		return math.LegacyZeroDec(), err
 	}
 
-	// Find the asset in response
+	// Find the asset in response by matching universe index
 	if len(result) >= 2 {
+		meta, ok := result[0].(map[string]interface{})
+		if !ok {
+			if exists {
+				return cached.Price, nil
+			}
+			return math.LegacyZeroDec(), fmt.Errorf("invalid meta format")
+		}
+
+		universe, ok := meta["universe"].([]interface{})
+		if !ok {
+			if exists {
+				return cached.Price, nil
+			}
+			return math.LegacyZeroDec(), fmt.Errorf("invalid universe format")
+		}
+
 		assetCtxs, ok := result[1].([]interface{})
-		if ok {
-			for _, ctx := range assetCtxs {
-				ctxMap, ok := ctx.(map[string]interface{})
+		if !ok {
+			if exists {
+				return cached.Price, nil
+			}
+			return math.LegacyZeroDec(), fmt.Errorf("invalid assetCtxs format")
+		}
+
+		// Find the asset index in universe
+		for i, u := range universe {
+			uMap, ok := u.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := uMap["name"].(string)
+			if name == hlAsset && i < len(assetCtxs) {
+				ctxMap, ok := assetCtxs[i].(map[string]interface{})
 				if !ok {
 					continue
 				}
-				if name, ok := ctxMap["name"].(string); ok && name == hlAsset {
-					if markPx, ok := ctxMap["markPx"].(string); ok {
-						price, err := math.LegacyNewDecFromStr(markPx)
-						if err == nil {
-							o.mu.Lock()
-							o.cache[marketID] = &PriceCache{
-								Price:     price,
-								Timestamp: time.Now(),
-							}
-							o.mu.Unlock()
-							return price, nil
+				if markPx, ok := ctxMap["markPx"].(string); ok {
+					price, err := math.LegacyNewDecFromStr(markPx)
+					if err == nil {
+						o.mu.Lock()
+						o.cache[marketID] = &PriceCache{
+							Price:     price,
+							Timestamp: time.Now(),
 						}
+						o.mu.Unlock()
+						return price, nil
 					}
 				}
 			}
@@ -170,6 +246,362 @@ func (o *HyperliquidOracle) GetPrice(marketID string) (math.LegacyDec, error) {
 		return cached.Price, nil
 	}
 	return math.LegacyZeroDec(), fmt.Errorf("price not found for %s", marketID)
+}
+
+// GetTicker fetches complete ticker data from Hyperliquid
+func (o *HyperliquidOracle) GetTicker(marketID string) (*TickerData, error) {
+	hlAsset, ok := assetToHL[marketID]
+	if !ok {
+		return nil, fmt.Errorf("unknown market: %s", marketID)
+	}
+
+	// Fetch metaAndAssetCtxs for comprehensive data
+	reqBody := `{"type": "metaAndAssetCtxs"}`
+	resp, err := o.httpClient.Post(o.apiURL, "application/json",
+		io.NopCloser(strings.NewReader(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var result []interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(result) < 2 {
+		return nil, fmt.Errorf("invalid response format")
+	}
+
+	assetCtxs, ok := result[1].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid asset contexts format")
+	}
+
+	for _, ctx := range assetCtxs {
+		ctxMap, ok := ctx.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// Note: Hyperliquid uses numeric index, not name
+		if name, hasName := ctxMap["name"].(string); hasName && name == hlAsset {
+			// Found our asset
+			markPx := getStringValue(ctxMap, "markPx", "0")
+			oraclePx := getStringValue(ctxMap, "oraclePx", markPx)
+			midPx := getStringValue(ctxMap, "midPx", markPx)
+			funding := getStringValue(ctxMap, "funding", "0")
+			dayNtlVlm := getStringValue(ctxMap, "dayNtlVlm", "0")
+
+			return &TickerData{
+				MarketID:    marketID,
+				MarkPrice:   markPx,
+				IndexPrice:  oraclePx,
+				LastPrice:   midPx,
+				High24h:     markPx, // Will calculate from klines if needed
+				Low24h:      markPx,
+				Volume24h:   dayNtlVlm,
+				Change24h:   "0.00", // Will calculate from klines if needed
+				FundingRate: funding,
+				NextFunding: time.Now().Truncate(time.Hour).Add(time.Hour).Unix(),
+				Timestamp:   time.Now().UnixMilli(),
+			}, nil
+		}
+	}
+
+	// Try finding by index based on universe order
+	meta, ok := result[0].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("price not found for %s", marketID)
+	}
+	universe, ok := meta["universe"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("price not found for %s", marketID)
+	}
+
+	for i, u := range universe {
+		uMap, ok := u.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, _ := uMap["name"].(string); name == hlAsset {
+			if i < len(assetCtxs) {
+				ctxMap := assetCtxs[i].(map[string]interface{})
+				markPx := getStringValue(ctxMap, "markPx", "0")
+				oraclePx := getStringValue(ctxMap, "oraclePx", markPx)
+				midPx := getStringValue(ctxMap, "midPx", markPx)
+				funding := getStringValue(ctxMap, "funding", "0")
+				dayNtlVlm := getStringValue(ctxMap, "dayNtlVlm", "0")
+
+				return &TickerData{
+					MarketID:    marketID,
+					MarkPrice:   markPx,
+					IndexPrice:  oraclePx,
+					LastPrice:   midPx,
+					High24h:     markPx,
+					Low24h:      markPx,
+					Volume24h:   dayNtlVlm,
+					Change24h:   "0.00",
+					FundingRate: funding,
+					NextFunding: time.Now().Truncate(time.Hour).Add(time.Hour).Unix(),
+					Timestamp:   time.Now().UnixMilli(),
+				}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("price not found for %s", marketID)
+}
+
+// GetOrderbook fetches L2 orderbook from Hyperliquid
+func (o *HyperliquidOracle) GetOrderbook(marketID string, depth int) (*OrderbookData, error) {
+	hlAsset, ok := assetToHL[marketID]
+	if !ok {
+		return nil, fmt.Errorf("unknown market: %s", marketID)
+	}
+
+	reqBody := fmt.Sprintf(`{"type":"l2Book","coin":"%s"}`, hlAsset)
+	resp, err := o.httpClient.Post(o.apiURL, "application/json",
+		io.NopCloser(strings.NewReader(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	levels, ok := result["levels"].([]interface{})
+	if !ok || len(levels) < 2 {
+		return nil, fmt.Errorf("invalid orderbook format")
+	}
+
+	// levels[0] = bids, levels[1] = asks
+	bidsRaw, _ := levels[0].([]interface{})
+	asksRaw, _ := levels[1].([]interface{})
+
+	bids := make([]OrderbookLevel, 0, depth)
+	asks := make([]OrderbookLevel, 0, depth)
+
+	for i, b := range bidsRaw {
+		if i >= depth {
+			break
+		}
+		bMap, ok := b.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		bids = append(bids, OrderbookLevel{
+			Price:    getStringValue(bMap, "px", "0"),
+			Quantity: getStringValue(bMap, "sz", "0"),
+		})
+	}
+
+	for i, a := range asksRaw {
+		if i >= depth {
+			break
+		}
+		aMap, ok := a.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		asks = append(asks, OrderbookLevel{
+			Price:    getStringValue(aMap, "px", "0"),
+			Quantity: getStringValue(aMap, "sz", "0"),
+		})
+	}
+
+	return &OrderbookData{
+		MarketID:  marketID,
+		Bids:      bids,
+		Asks:      asks,
+		Timestamp: time.Now().UnixMilli(),
+	}, nil
+}
+
+// GetRecentTrades fetches recent trades from Hyperliquid
+func (o *HyperliquidOracle) GetRecentTrades(marketID string, limit int) ([]TradeData, error) {
+	hlAsset, ok := assetToHL[marketID]
+	if !ok {
+		return nil, fmt.Errorf("unknown market: %s", marketID)
+	}
+
+	reqBody := fmt.Sprintf(`{"type":"recentTrades","coin":"%s"}`, hlAsset)
+	resp, err := o.httpClient.Post(o.apiURL, "application/json",
+		io.NopCloser(strings.NewReader(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var tradesRaw []interface{}
+	if err := json.Unmarshal(body, &tradesRaw); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	trades := make([]TradeData, 0, limit)
+	for i, t := range tradesRaw {
+		if i >= limit {
+			break
+		}
+		tMap, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		side := "buy"
+		if s, ok := tMap["side"].(string); ok && s == "A" {
+			side = "sell"
+		}
+
+		ts := time.Now().UnixMilli()
+		if tsFloat, ok := tMap["time"].(float64); ok {
+			ts = int64(tsFloat)
+		}
+
+		trades = append(trades, TradeData{
+			TradeID:   fmt.Sprintf("T%d", ts),
+			MarketID:  marketID,
+			Price:     getStringValue(tMap, "px", "0"),
+			Quantity:  getStringValue(tMap, "sz", "0"),
+			Side:      side,
+			Timestamp: ts,
+		})
+	}
+
+	return trades, nil
+}
+
+// GetKlines fetches candlestick data from Hyperliquid
+func (o *HyperliquidOracle) GetKlines(marketID, interval string, limit int) ([]KlineData, error) {
+	hlAsset, ok := assetToHL[marketID]
+	if !ok {
+		return nil, fmt.Errorf("unknown market: %s", marketID)
+	}
+
+	// Calculate time range
+	endTime := time.Now()
+	var duration time.Duration
+	switch interval {
+	case "1m":
+		duration = time.Minute
+	case "5m":
+		duration = 5 * time.Minute
+	case "15m":
+		duration = 15 * time.Minute
+	case "30m":
+		duration = 30 * time.Minute
+	case "1h":
+		duration = time.Hour
+	case "4h":
+		duration = 4 * time.Hour
+	case "1d":
+		duration = 24 * time.Hour
+	default:
+		duration = time.Hour
+		interval = "1h"
+	}
+	startTime := endTime.Add(-duration * time.Duration(limit))
+
+	reqBody := fmt.Sprintf(`{"type":"candleSnapshot","req":{"coin":"%s","interval":"%s","startTime":%d,"endTime":%d}}`,
+		hlAsset, interval, startTime.UnixMilli(), endTime.UnixMilli())
+
+	resp, err := o.httpClient.Post(o.apiURL, "application/json",
+		io.NopCloser(strings.NewReader(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var candlesRaw []interface{}
+	if err := json.Unmarshal(body, &candlesRaw); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	klines := make([]KlineData, 0, len(candlesRaw))
+	for _, c := range candlesRaw {
+		cMap, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		ts := int64(0)
+		if t, ok := cMap["t"].(float64); ok {
+			ts = int64(t) / 1000 // Convert to seconds
+		}
+
+		klines = append(klines, KlineData{
+			Time:   ts,
+			Open:   getFloatValue(cMap, "o", 0),
+			High:   getFloatValue(cMap, "h", 0),
+			Low:    getFloatValue(cMap, "l", 0),
+			Close:  getFloatValue(cMap, "c", 0),
+			Volume: getFloatValue(cMap, "v", 0),
+		})
+	}
+
+	// Limit results
+	if len(klines) > limit {
+		klines = klines[len(klines)-limit:]
+	}
+
+	return klines, nil
+}
+
+// Helper function to get string value from map
+func getStringValue(m map[string]interface{}, key, defaultVal string) string {
+	if v, ok := m[key]; ok {
+		switch val := v.(type) {
+		case string:
+			return val
+		case float64:
+			return fmt.Sprintf("%.8f", val)
+		}
+	}
+	return defaultVal
+}
+
+// Helper function to get float value from map
+func getFloatValue(m map[string]interface{}, key string, defaultVal float64) float64 {
+	if v, ok := m[key]; ok {
+		switch val := v.(type) {
+		case float64:
+			return val
+		case string:
+			if f, err := parseFloat(val); err == nil {
+				return f
+			}
+		}
+	}
+	return defaultVal
+}
+
+// parseFloat parses a string to float64
+func parseFloat(s string) (float64, error) {
+	var f float64
+	_, err := fmt.Sscanf(s, "%f", &f)
+	return f, err
 }
 
 // MemoryBankKeeper implements a real in-memory bank keeper for standalone mode
@@ -440,7 +872,8 @@ func initializeMarkets(keeper *perpkeeper.Keeper, ctx sdk.Context) {
 	}
 }
 
-// InitializeTestAccount creates an account with initial balance for testing
+// InitializeTestAccount creates an account with EXACT specified balance for testing
+// This SETS the balance (not adds to it) to ensure deterministic test behavior
 func (rs *RealServiceV2) InitializeTestAccount(trader string, balance string) error {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
@@ -450,9 +883,11 @@ func (rs *RealServiceV2) InitializeTestAccount(trader string, balance string) er
 		return err
 	}
 
-	// Initialize in perpetual keeper
+	// Get or create account, then SET the balance to exact value
+	// (GetOrCreateAccount may give initial balance, we override it)
 	account := rs.perpKeeper.GetOrCreateAccount(rs.sdkCtx, trader)
-	account.Deposit(balanceDec)
+	account.Balance = balanceDec // SET to exact value, not deposit/add
+	account.LockedMargin = math.LegacyZeroDec() // Reset locked margin
 	rs.perpKeeper.SetAccount(rs.sdkCtx, account)
 
 	// Also initialize in MemoryBankKeeper for real fund transfers

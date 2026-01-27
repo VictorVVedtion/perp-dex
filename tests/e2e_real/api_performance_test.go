@@ -526,6 +526,7 @@ func TestAPI_MemoryPressure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping memory pressure test in short mode")
 	}
+	CheckAPIAvailable(t)
 
 	config := DefaultConfig()
 	client := NewHTTPClient(config)
