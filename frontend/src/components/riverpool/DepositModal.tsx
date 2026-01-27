@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Pool, useRiverpoolStore } from '@/stores/riverpoolStore';
+import { useWallet } from '@/hooks/useWallet';
 import BigNumber from 'bignumber.js';
 
 interface DepositModalProps {
@@ -21,6 +22,9 @@ export default function DepositModal({ pool, onClose }: DepositModalProps) {
     isLoading,
     error,
   } = useRiverpoolStore();
+
+  // Use real wallet address from connected wallet
+  const { connected, address, connect } = useWallet();
 
   const [estimatedShares, setEstimatedShares] = useState('0');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -76,10 +80,15 @@ export default function DepositModal({ pool, onClose }: DepositModalProps) {
       return;
     }
 
+    // Check wallet connection
+    if (!connected || !address) {
+      setLocalError('Please connect your wallet first');
+      return;
+    }
+
     try {
-      // In a real implementation, this would use the connected wallet address
-      const depositor = 'cosmos1...'; // Placeholder
-      await deposit(depositor, pool.poolId, depositAmount);
+      // Use connected wallet address
+      await deposit(address, pool.poolId, depositAmount);
       onClose();
     } catch (err) {
       setLocalError((err as Error).message);

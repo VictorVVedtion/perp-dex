@@ -3,12 +3,7 @@
  * Unified interface for multiple wallet providers
  */
 
-// Extend Window interface for Ethereum provider
-declare global {
-  interface Window {
-    ethereum?: unknown;
-  }
-}
+// Note: Window.ethereum type is declared in metamask.ts
 
 import type {
   IWallet,
@@ -20,17 +15,18 @@ import type {
   ChainConfig,
 } from './types';
 import { KeplrWallet, PERPDEX_CHAIN_CONFIG } from './keplr';
+import { MetaMaskWallet } from './metamask';
 import { MockWallet } from './mock';
 
 // Storage key for persisting wallet connection
 const STORAGE_KEY = 'perpdex_wallet';
 
-// Wallet registry
+// Wallet registry - MetaMask is now the primary wallet (like Hyperliquid)
 const walletRegistry: Record<WalletProvider, new (config?: ChainConfig) => IWallet> = {
-  keplr: KeplrWallet,
-  metamask: KeplrWallet, // Placeholder - would have separate implementation
+  metamask: MetaMaskWallet,  // Primary wallet - EIP-712 signing
+  keplr: KeplrWallet,        // Cosmos native wallet
   walletconnect: KeplrWallet, // Placeholder - would have separate implementation
-  mock: MockWallet,
+  mock: MockWallet,          // Development mode only
 };
 
 /**
@@ -202,6 +198,10 @@ export class WalletManager {
       throw new Error('Wallet not connected');
     }
 
+    if (this._wallet instanceof MetaMaskWallet) {
+      return (this._wallet as MetaMaskWallet).signMessage(message);
+    }
+
     if (this._wallet instanceof KeplrWallet) {
       const result = await (this._wallet as KeplrWallet).signArbitrary(
         this._state.account.address,
@@ -211,6 +211,46 @@ export class WalletManager {
     }
 
     throw new Error('Sign message not supported for this wallet');
+  }
+
+  /**
+   * Sign typed data using EIP-712 (MetaMask only)
+   */
+  async signTypedData<T extends Record<string, unknown>>(
+    primaryType: string,
+    message: T
+  ): Promise<string> {
+    if (!this._wallet || !this._state.account) {
+      throw new Error('Wallet not connected');
+    }
+
+    if (this._wallet instanceof MetaMaskWallet) {
+      return (this._wallet as MetaMaskWallet).signTypedData(primaryType, message);
+    }
+
+    throw new Error('EIP-712 signing only supported with MetaMask');
+  }
+
+  /**
+   * Sign an order (MetaMask EIP-712)
+   */
+  async signOrder(order: {
+    marketId: string;
+    side: string;
+    type: string;
+    price: string;
+    size: string;
+    leverage: string;
+  }): Promise<{ signature: string; nonce: number; expiry: number }> {
+    if (!this._wallet || !this._state.account) {
+      throw new Error('Wallet not connected');
+    }
+
+    if (this._wallet instanceof MetaMaskWallet) {
+      return (this._wallet as MetaMaskWallet).signOrder(order);
+    }
+
+    throw new Error('Order signing only supported with MetaMask');
   }
 
   /**

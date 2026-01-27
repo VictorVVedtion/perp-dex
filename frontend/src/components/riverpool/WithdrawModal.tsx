@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Pool, useRiverpoolStore } from '@/stores/riverpoolStore';
+import { useWallet } from '@/hooks/useWallet';
 import BigNumber from 'bignumber.js';
 
 interface WithdrawModalProps {
@@ -34,12 +35,15 @@ export default function WithdrawModal({ pool, onClose }: WithdrawModalProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [percentageSelected, setPercentageSelected] = useState<number | null>(null);
 
-  // Placeholder user address
-  const userAddress = 'cosmos1...';
+  // Use real wallet address from connected wallet
+  const { connected, address } = useWallet();
 
   useEffect(() => {
-    fetchUserPoolBalance(pool.poolId, userAddress);
-  }, [pool.poolId, fetchUserPoolBalance]);
+    // Only fetch balance if wallet is connected
+    if (connected && address) {
+      fetchUserPoolBalance(pool.poolId, address);
+    }
+  }, [pool.poolId, fetchUserPoolBalance, connected, address]);
 
   useEffect(() => {
     const fetchEstimate = async () => {
@@ -86,8 +90,14 @@ export default function WithdrawModal({ pool, onClose }: WithdrawModalProps) {
       return;
     }
 
+    // Check wallet connection
+    if (!connected || !address) {
+      setLocalError('Please connect your wallet first');
+      return;
+    }
+
     try {
-      await requestWithdrawal(userAddress, pool.poolId, withdrawShares);
+      await requestWithdrawal(address, pool.poolId, withdrawShares);
       onClose();
     } catch (err) {
       setLocalError((err as Error).message);

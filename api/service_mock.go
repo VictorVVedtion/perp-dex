@@ -30,47 +30,11 @@ func NewMockService() *MockService {
 	return ms
 }
 
-// initMockData initializes some mock data
+// initMockData initializes the service
+// NOTE: No hardcoded demo data - all data comes from real user actions
 func (ms *MockService) initMockData() {
-	// Add a sample position
-	ms.positions["cosmos1demo:BTC-USDC"] = &types.Position{
-		MarketID:         "BTC-USDC",
-		Trader:           "cosmos1demo",
-		Side:             "long",
-		Size:             "0.1",
-		EntryPrice:       "97200.00",
-		MarkPrice:        "97500.00",
-		Margin:           "1944.00",
-		Leverage:         "5",
-		UnrealizedPnl:    "30.00",
-		LiquidationPrice: "88560.00",
-		MarginMode:       "isolated",
-	}
-
-	// Add a sample account
-	ms.accounts["cosmos1demo"] = &types.Account{
-		Trader:           "cosmos1demo",
-		Balance:          "12500.00",
-		LockedMargin:     "4000.00",
-		AvailableBalance: "8500.00",
-		MarginMode:       "isolated",
-		UpdatedAt:        types.NowMillis(),
-	}
-
-	// Add a sample order
-	ms.orders["order-1"] = &types.Order{
-		OrderID:   "order-1",
-		Trader:    "cosmos1demo",
-		MarketID:  "BTC-USDC",
-		Side:      "buy",
-		Type:      "limit",
-		Price:     "96000.00",
-		Quantity:  "0.05",
-		FilledQty: "0.00",
-		Status:    "open",
-		CreatedAt: types.NowMillis() - 3600000,
-		UpdatedAt: types.NowMillis() - 3600000,
-	}
+	// Empty initialization - no demo/mock data
+	// Users start with empty accounts and must deposit/trade to see data
 }
 
 // ============ OrderService Implementation ============

@@ -278,80 +278,51 @@ interface RiverpoolState {
 
 const API_BASE = config.api.baseUrl;
 
-// Mock data for development and E2E testing
-const MOCK_POOLS: Pool[] = [
+// Default pool structures (no fake data)
+// These represent the protocol infrastructure pools with zero deposits
+const DEFAULT_POOLS: Pool[] = [
   {
-    poolId: 'foundation-1',
+    poolId: 'foundation-lp',
     poolType: 'foundation',
     name: 'Foundation LP',
     description: '100 seats × $100K, 180-day lock, 5M Points/seat. Early liquidity providers earn maximum rewards.',
     status: 'active',
-    totalDeposits: '7500000',
-    totalShares: '7500000',
+    totalDeposits: '0',  // Starts empty
+    totalShares: '0',
     nav: '1.0000',
     highWaterMark: '1.0000',
-    currentDrawdown: '0.00',
+    currentDrawdown: '0',
     ddGuardLevel: 'normal',
     minDeposit: '100000',
     maxDeposit: '100000',
     lockPeriodDays: 180,
-    redemptionDelayDays: 0,
+    redemptionDelayDays: 7,
     dailyRedemptionLimit: '0',
-    seatsAvailable: 25,
-    createdAt: Date.now() / 1000 - 86400 * 30,
+    seatsAvailable: 100,  // All seats available
+    createdAt: Date.now() / 1000,
     updatedAt: Date.now() / 1000,
   },
   {
-    poolId: 'main-1',
+    poolId: 'main-lp',
     poolType: 'main',
     name: 'Main LP',
     description: '$100 minimum deposit, no lock period, T+4 redemption with 15% daily limit.',
     status: 'active',
-    totalDeposits: '2500000',
-    totalShares: '2500000',
-    nav: '1.0012',
-    highWaterMark: '1.0015',
-    currentDrawdown: '0.0003',
+    totalDeposits: '0',  // Starts empty
+    totalShares: '0',
+    nav: '1.0000',
+    highWaterMark: '1.0000',
+    currentDrawdown: '0',
     ddGuardLevel: 'normal',
     minDeposit: '100',
     maxDeposit: '0',
     lockPeriodDays: 0,
     redemptionDelayDays: 4,
     dailyRedemptionLimit: '0.15',
-    createdAt: Date.now() / 1000 - 86400 * 30,
+    createdAt: Date.now() / 1000,
     updatedAt: Date.now() / 1000,
   },
-  {
-    poolId: 'community-1',
-    poolType: 'community',
-    name: 'Alpha Trend Strategy',
-    description: 'Trend-following strategy focused on BTC and ETH with moderate leverage.',
-    status: 'active',
-    totalDeposits: '150000',
-    totalShares: '150000',
-    nav: '1.0235',
-    highWaterMark: '1.0300',
-    currentDrawdown: '0.0063',
-    ddGuardLevel: 'normal',
-    minDeposit: '100',
-    maxDeposit: '50000',
-    lockPeriodDays: 7,
-    redemptionDelayDays: 3,
-    dailyRedemptionLimit: '0.20',
-    owner: 'perpdex1abc123def456...',
-    managementFee: '0.02',
-    performanceFee: '0.20',
-    ownerMinStake: '0.05',
-    ownerCurrentStake: '0.08',
-    isPrivate: false,
-    requiresInviteCode: false,
-    totalHolders: 42,
-    allowedMarkets: ['BTC-USDC', 'ETH-USDC'],
-    maxLeverage: '10',
-    tags: ['BTC', 'ETH', 'Trend'],
-    createdAt: Date.now() / 1000 - 86400 * 14,
-    updatedAt: Date.now() / 1000,
-  },
+  // No fake community pools - users create them
 ];
 
 export const useRiverpoolStore = create<RiverpoolState>((set, get) => ({
@@ -445,9 +416,9 @@ export const useRiverpoolStore = create<RiverpoolState>((set, get) => ({
 
       set({ pools: mappedPools, isLoading: false });
     } catch (error) {
-      // Use mock data in development/testing when API is unavailable
-      console.warn('API unavailable, using mock data:', (error as Error).message);
-      set({ pools: MOCK_POOLS, isLoading: false, error: null });
+      // Use default pool structures when API is unavailable
+      console.warn('API unavailable, using default pools:', (error as Error).message);
+      set({ pools: DEFAULT_POOLS, isLoading: false, error: null });
     }
   },
 

@@ -31,19 +31,26 @@ func NewMockRiverpoolService() *MockRiverpoolService {
 }
 
 func (s *MockRiverpoolService) initMockData() {
+	// NOTE: No hardcoded demo pools
+	// Pools are created through the API or initialized by admins
+	// This keeps the service empty by default
+
+	// Create core pools structure (Foundation LP and Main LP)
+	// These represent the protocol's infrastructure pools
+	// but start with 0 deposits until real liquidity is added
 	now := time.Now().Unix()
 
-	// Foundation LP Pool
+	// Foundation LP Pool - protocol infrastructure
 	s.pools["foundation-lp"] = &types.PoolInfo{
 		PoolID:              "foundation-lp",
 		PoolType:            "foundation",
 		Name:                "Foundation LP",
 		Description:         "Premier liquidity pool with guaranteed allocation",
 		Status:              "active",
-		TotalDeposits:       "5000000",
-		TotalShares:         "5000000",
-		NAV:                 "1.05",
-		HighWaterMark:       "1.05",
+		TotalDeposits:       "0",  // Starts empty
+		TotalShares:         "0",
+		NAV:                 "1.0000",
+		HighWaterMark:       "1.0000",
 		CurrentDrawdown:     "0",
 		DDGuardLevel:        "normal",
 		MinDeposit:          "100000",
@@ -52,68 +59,34 @@ func (s *MockRiverpoolService) initMockData() {
 		RedemptionDelayDays: 7,
 		DailyRedemptionLimit: "0",
 		SeatsAvailable:      50,
-		CreatedAt:           now - 86400*30,
+		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
 
-	// Main LP Pool
+	// Main LP Pool - protocol infrastructure
 	s.pools["main-lp"] = &types.PoolInfo{
 		PoolID:              "main-lp",
 		PoolType:            "main",
 		Name:                "Main LP",
 		Description:         "Open liquidity pool with flexible deposits",
 		Status:              "active",
-		TotalDeposits:       "10000000",
-		TotalShares:         "9800000",
-		NAV:                 "1.02",
-		HighWaterMark:       "1.03",
-		CurrentDrawdown:     "0.97",
+		TotalDeposits:       "0",  // Starts empty
+		TotalShares:         "0",
+		NAV:                 "1.0000",
+		HighWaterMark:       "1.0000",
+		CurrentDrawdown:     "0",
 		DDGuardLevel:        "normal",
 		MinDeposit:          "100",
 		MaxDeposit:          "0",
 		LockPeriodDays:      0,
 		RedemptionDelayDays: 4,
 		DailyRedemptionLimit: "15",
-		CreatedAt:           now - 86400*60,
+		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
 
-	// Sample Community Pool
-	s.pools["community-alpha"] = &types.PoolInfo{
-		PoolID:              "community-alpha",
-		PoolType:            "community",
-		Name:                "Alpha Strategy",
-		Description:         "High-frequency trading strategy pool",
-		Status:              "active",
-		TotalDeposits:       "500000",
-		TotalShares:         "480000",
-		NAV:                 "1.04",
-		HighWaterMark:       "1.04",
-		CurrentDrawdown:     "0",
-		DDGuardLevel:        "normal",
-		MinDeposit:          "1000",
-		MaxDeposit:          "50000",
-		LockPeriodDays:      30,
-		RedemptionDelayDays: 7,
-		DailyRedemptionLimit: "10",
-		Owner:               "cosmos1owner123",
-		CreatedAt:           now - 86400*14,
-		UpdatedAt:           now,
-	}
-
-	// Generate NAV history for each pool
-	for poolID := range s.pools {
-		history := make([]*types.NAVPoint, 30)
-		baseNAV := 1.0
-		for i := 0; i < 30; i++ {
-			baseNAV += (float64(i%3) - 1) * 0.001
-			history[i] = &types.NAVPoint{
-				Timestamp: now - int64((29-i)*86400),
-				NAV:       fmt.Sprintf("%.4f", baseNAV),
-			}
-		}
-		s.navHistory[poolID] = history
-	}
+	// No community pools by default - users create them
+	// No fake NAV history - will be generated from real data
 }
 
 // Implementation of types.RiverpoolService interface

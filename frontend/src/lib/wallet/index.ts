@@ -23,6 +23,7 @@
 
 export * from './types';
 export { KeplrWallet, PERPDEX_CHAIN_CONFIG } from './keplr';
+export { MetaMaskWallet } from './metamask';
 export { WalletManager, getWalletManager } from './manager';
 
 // Re-export commonly used types

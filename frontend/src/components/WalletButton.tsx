@@ -141,7 +141,7 @@ export function WalletButton() {
   return (
     <div className="flex flex-col items-end">
       <button
-        onClick={connect}
+        onClick={() => connect()}
         className="relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 flex items-center space-x-2 group transform hover:-translate-y-0.5 active:translate-y-0"
       >
         <div className="absolute inset-0 w-full h-full bg-white/20 transform -skew-x-12 -translate-x-full group-hover:animate-shine" />

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useRiverpoolStore, CreateCommunityPoolConfig } from '@/stores/riverpoolStore';
+import { useWallet } from '@/hooks/useWallet';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -24,6 +25,7 @@ const AVAILABLE_TAGS = ['BTC', 'ETH', 'Trend', 'Grid', 'Arbitrage', 'DeFi', 'Hig
 export default function CreatePoolPage() {
   const router = useRouter();
   const { createCommunityPool, isLoading, error } = useRiverpoolStore();
+  const { connected, address } = useWallet();
 
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [formData, setFormData] = useState<CreateCommunityPoolConfig>({
@@ -60,10 +62,15 @@ export default function CreatePoolPage() {
   };
 
   const handleCreate = async () => {
+    // Check wallet connection
+    if (!connected || !address) {
+      console.error('Wallet not connected');
+      return;
+    }
+
     try {
-      // In real implementation, get owner address from wallet
-      const owner = 'perpdex1owner...'; // Placeholder
-      await createCommunityPool(owner, formData);
+      // Use connected wallet address as pool owner
+      await createCommunityPool(address, formData);
       router.push('/riverpool?tab=community');
     } catch (err) {
       console.error('Failed to create pool:', err);
