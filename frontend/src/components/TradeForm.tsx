@@ -8,6 +8,7 @@ import { useTradingStore } from '@/stores/tradingStore';
 import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/contexts/ToastContext';
 import { OrderConfirmModal } from './OrderConfirmModal';
+import { config } from '@/lib/config';
 import BigNumber from 'bignumber.js';
 
 // Order type definitions
@@ -407,17 +408,31 @@ export function TradeForm() {
            )}
         </div>
 
+        {/* Demo Mode Banner */}
+        {config.features.demoMode && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-amber-400">
+              <span className="font-semibold">Demo Mode:</span> Trading backend is not connected. Market data is live from Hyperliquid.
+            </p>
+          </div>
+        )}
+
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={!connected || isSubmitting}
+          disabled={!connected || isSubmitting || config.features.demoMode}
           className={`w-full py-3.5 rounded-lg text-sm font-bold text-white transition-all duration-300 shadow-lg transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex justify-center items-center gap-2 ${
              isBuy
                ? 'bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 shadow-glow-primary'
                : 'bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-glow-danger'
           }`}
         >
-          {!connected ? (
+          {config.features.demoMode ? (
+             <span>Trading Unavailable (Demo Mode)</span>
+          ) : !connected ? (
              'Connect Wallet to Trade'
           ) : isSubmitting ? (
              <>

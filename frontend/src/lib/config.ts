@@ -72,6 +72,10 @@ export const config = {
 
     // Backward compatibility alias
     useHyperliquid: process.env.NEXT_PUBLIC_USE_HYPERLIQUID !== 'false',
+
+    // Demo mode: Display-only mode when backend is not available
+    // Trading buttons will show informational message instead of executing
+    demoMode: !process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL === '',
   },
 
   // Trading Configuration

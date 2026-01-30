@@ -43,6 +43,20 @@ coverage/
 *.cover
 *.coverage
 
+# Test outputs
+playwright-report/
+test-results/
+tsconfig.tsbuildinfo
+
+# Skillpack
+.skillpack/
+
+# Local test directories
+.perpdex-test/
+
+# Local binaries
+perp-api
+
 # Temporary files
 tmp/
 temp/
